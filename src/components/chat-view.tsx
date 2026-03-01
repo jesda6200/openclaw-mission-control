@@ -25,8 +25,11 @@ import {
   KeyRound,
   ArrowRight,
   ExternalLink,
+  Eye,
+  EyeOff,
+  Check,
+  Loader2,
 } from "lucide-react";
-import Link from "next/link";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import { cn } from "@/lib/utils";
@@ -235,6 +238,184 @@ function MessageContent({ text }: { text: string }) {
   );
 }
 
+/* ── Inline API key setup ─────────────────────── */
+
+const PROVIDERS = [
+  { id: "openai", emoji: "🟢", name: "OpenAI", hint: "ChatGPT, GPT-4o", keyHint: "sk-...", url: "https://platform.openai.com/api-keys" },
+  { id: "anthropic", emoji: "🟣", name: "Anthropic", hint: "Claude", keyHint: "sk-ant-...", url: "https://console.anthropic.com/settings/keys" },
+  { id: "google", emoji: "🔵", name: "Google", hint: "Gemini", keyHint: "AIza...", url: "https://aistudio.google.com/apikey" },
+  { id: "openrouter", emoji: "🟠", name: "OpenRouter", hint: "Many models", keyHint: "sk-or-...", url: "https://openrouter.ai/keys" },
+] as const;
+
+function ApiKeySetup({ onKeySaved, compact }: { onKeySaved: () => void; compact?: boolean }) {
+  const [selectedProvider, setSelectedProvider] = useState<string | null>(null);
+  const [key, setKey] = useState("");
+  const [showKey, setShowKey] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [success, setSuccess] = useState(false);
+  const inputRef = useRef<HTMLInputElement>(null);
+
+  const provider = PROVIDERS.find((p) => p.id === selectedProvider);
+
+  useEffect(() => {
+    if (selectedProvider) {
+      setTimeout(() => inputRef.current?.focus(), 100);
+    }
+  }, [selectedProvider]);
+
+  const handleSave = useCallback(async () => {
+    if (!selectedProvider || !key.trim()) return;
+    setSaving(true);
+    setError(null);
+    try {
+      const res = await fetch("/api/models", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action: "auth-provider", provider: selectedProvider, token: key.trim() }),
+      });
+      const data = await res.json();
+      if (data.ok) {
+        setSuccess(true);
+        setTimeout(() => onKeySaved(), 600);
+      } else {
+        setError(data.error || "Could not save — check your key and try again.");
+      }
+    } catch {
+      setError("Connection failed — is your gateway running?");
+    }
+    setSaving(false);
+  }, [selectedProvider, key, onKeySaved]);
+
+  if (success) {
+    return (
+      <div className={cn(
+        "flex items-center justify-center gap-2 rounded-2xl border border-emerald-500/30 bg-emerald-500/5 p-6 animate-modal-in",
+        compact && "p-4"
+      )}>
+        <div className="flex h-8 w-8 items-center justify-center rounded-full bg-emerald-500/20">
+          <Check className="h-4 w-4 text-emerald-500" />
+        </div>
+        <div>
+          <p className="text-sm font-medium text-emerald-600 dark:text-emerald-400">Connected!</p>
+          <p className="text-xs text-muted-foreground">Loading your models...</p>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className={cn("w-full", compact && "max-w-full")}>
+      {!compact && (
+        <>
+          <div className="mb-5 flex items-center gap-3">
+            <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-[var(--accent-brand)] text-[var(--accent-brand-on)] shadow-sm">
+              <KeyRound className="h-5 w-5" />
+            </div>
+            <div>
+              <h3 className="text-sm font-semibold tracking-tight text-foreground">
+                Add your API key
+              </h3>
+              <p className="text-xs text-muted-foreground">
+                One-time setup &middot; takes 30 seconds
+              </p>
+            </div>
+          </div>
+          <p className="mb-5 text-xs leading-relaxed text-muted-foreground">
+            An API key is a password that lets your agent connect to an AI
+            service (like ChatGPT or Claude). Pick a provider, grab a key, and paste it below.
+          </p>
+        </>
+      )}
+
+      {/* Provider selector */}
+      <div className={cn("grid grid-cols-2 gap-2", compact ? "mb-3" : "mb-5")}>
+        {PROVIDERS.map((p) => (
+          <button
+            key={p.id}
+            type="button"
+            onClick={() => {
+              setSelectedProvider(selectedProvider === p.id ? null : p.id);
+              setKey("");
+              setError(null);
+              setShowKey(false);
+            }}
+            className={cn(
+              "group flex items-center gap-2.5 rounded-xl border px-3 py-2.5 text-left transition-all",
+              selectedProvider === p.id
+                ? "border-[var(--accent-brand-border)] bg-[var(--accent-brand-subtle)] shadow-sm"
+                : "border-foreground/8 bg-muted/40 hover:border-[var(--accent-brand-border)] hover:bg-[var(--accent-brand-subtle)] hover:shadow-sm"
+            )}
+          >
+            <span className="text-base">{p.emoji}</span>
+            <div className="min-w-0 flex-1">
+              <span className="block text-xs font-medium text-foreground/80">{p.name}</span>
+              <span className="block text-[11px] text-muted-foreground/60">{p.hint}</span>
+            </div>
+          </button>
+        ))}
+      </div>
+
+      {/* Key input (revealed after picking a provider) */}
+      {selectedProvider && provider && (
+        <div className="animate-modal-in space-y-2.5">
+          <div className="flex items-center justify-between">
+            <label className="text-xs font-medium text-foreground/80">
+              Paste your {provider.name} key
+            </label>
+            <a
+              href={provider.url}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="flex items-center gap-1 text-[11px] text-[var(--accent-brand-text)] hover:underline"
+            >
+              Get a key <ExternalLink className="h-2.5 w-2.5" />
+            </a>
+          </div>
+          <div className="flex gap-2">
+            <div className="relative flex-1">
+              <input
+                ref={inputRef}
+                type={showKey ? "text" : "password"}
+                value={key}
+                onChange={(e) => { setKey(e.target.value); setError(null); }}
+                onKeyDown={(e) => { if (e.key === "Enter" && key.trim()) handleSave(); }}
+                placeholder={provider.keyHint}
+                className="w-full rounded-lg border border-foreground/10 bg-card px-3 py-2 pr-9 font-mono text-xs text-foreground outline-none transition-colors placeholder:text-muted-foreground/40 focus:border-[var(--accent-brand-border)] focus:ring-1 focus:ring-[var(--accent-brand-ring)]"
+              />
+              <button
+                type="button"
+                onClick={() => setShowKey(!showKey)}
+                className="absolute right-2 top-1/2 -translate-y-1/2 rounded p-0.5 text-muted-foreground/40 hover:text-foreground/60"
+                tabIndex={-1}
+              >
+                {showKey ? <EyeOff className="h-3.5 w-3.5" /> : <Eye className="h-3.5 w-3.5" />}
+              </button>
+            </div>
+            <button
+              type="button"
+              onClick={handleSave}
+              disabled={!key.trim() || saving}
+              className={cn(
+                "flex items-center gap-1.5 rounded-lg px-4 py-2 text-xs font-medium transition-all",
+                key.trim() && !saving
+                  ? "bg-[var(--accent-brand)] text-[var(--accent-brand-on)] shadow-sm hover:opacity-90 hover:shadow-md"
+                  : "bg-muted text-muted-foreground/60"
+              )}
+            >
+              {saving ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <ArrowRight className="h-3.5 w-3.5" />}
+              {saving ? "Saving..." : "Connect"}
+            </button>
+          </div>
+          {error && (
+            <p className="text-xs text-red-400">{error}</p>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
 /* ── Chat panel for a single agent ─────────────── */
 /* These are always mounted; hidden via CSS when not selected */
 
@@ -247,6 +428,7 @@ function ChatPanel({
   isVisible,
   availableModels,
   modelsLoaded,
+  onKeySaved,
 }: {
   agentId: string;
   agentName: string;
@@ -256,6 +438,7 @@ function ChatPanel({
   isVisible: boolean;
   availableModels: Array<{ key: string; name: string }>;
   modelsLoaded: boolean;
+  onKeySaved: () => void;
 }) {
   const timeFormat = useSyncExternalStore(
     subscribeTimeFormatPreference,
@@ -423,68 +606,12 @@ function ChatPanel({
       <div className="flex-1 overflow-y-auto">
         {messages.length === 0 ? (
           noApiKeys ? (
-            /* ── No API keys — onboarding empty state ── */
+            /* ── No API keys — inline setup ── */
             <div className="flex h-full items-center justify-center px-4 md:px-6">
               <div className="relative w-full max-w-md animate-modal-in">
-                {/* Warm radial glow behind the card */}
                 <div className="pointer-events-none absolute -inset-12 rounded-full bg-[var(--accent-brand)] opacity-[0.04] blur-3xl" />
-
                 <div className="relative rounded-2xl border border-[var(--accent-brand-border)]/60 bg-card p-6 shadow-lg shadow-[var(--accent-brand-ring)]/10">
-                  {/* Step indicator */}
-                  <div className="mb-5 flex items-center gap-3">
-                    <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-[var(--accent-brand)] text-[var(--accent-brand-on)] shadow-sm">
-                      <KeyRound className="h-5 w-5" />
-                    </div>
-                    <div>
-                      <h3 className="text-sm font-semibold tracking-tight text-foreground">
-                        Add your API key
-                      </h3>
-                      <p className="text-xs text-muted-foreground">
-                        One-time setup &middot; takes 30 seconds
-                      </p>
-                    </div>
-                  </div>
-
-                  {/* Explanation */}
-                  <p className="mb-5 text-xs leading-relaxed text-muted-foreground">
-                    An API key is a password that lets your agent connect to an AI
-                    service (like ChatGPT or Claude). Get one from any provider below,
-                    then paste it in Settings.
-                  </p>
-
-                  {/* Provider cards */}
-                  <div className="mb-5 grid grid-cols-2 gap-2">
-                    {[
-                      { emoji: "🟢", name: "OpenAI", hint: "ChatGPT, GPT-4o", url: "https://platform.openai.com/api-keys" },
-                      { emoji: "🟣", name: "Anthropic", hint: "Claude", url: "https://console.anthropic.com/settings/keys" },
-                      { emoji: "🔵", name: "Google", hint: "Gemini", url: "https://aistudio.google.com/apikey" },
-                      { emoji: "🟠", name: "OpenRouter", hint: "Many models", url: "https://openrouter.ai/keys" },
-                    ].map((p) => (
-                      <a
-                        key={p.name}
-                        href={p.url}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="group flex items-center gap-2.5 rounded-xl border border-foreground/8 bg-muted/40 px-3 py-2.5 transition-all hover:border-[var(--accent-brand-border)] hover:bg-[var(--accent-brand-subtle)] hover:shadow-sm"
-                      >
-                        <span className="text-base">{p.emoji}</span>
-                        <div className="min-w-0 flex-1">
-                          <span className="block text-xs font-medium text-foreground/80 group-hover:text-foreground">{p.name}</span>
-                          <span className="block text-[11px] text-muted-foreground/60">{p.hint}</span>
-                        </div>
-                        <ExternalLink className="h-3 w-3 shrink-0 text-muted-foreground/30 transition-colors group-hover:text-[var(--accent-brand-text)]" />
-                      </a>
-                    ))}
-                  </div>
-
-                  {/* CTA */}
-                  <Link
-                    href="/accounts"
-                    className="group flex w-full items-center justify-center gap-2 rounded-xl bg-[var(--accent-brand)] px-5 py-2.5 text-sm font-medium text-[var(--accent-brand-on)] shadow-sm transition-all hover:opacity-90 hover:shadow-md"
-                  >
-                    I have a key &mdash; paste it now
-                    <ArrowRight className="h-3.5 w-3.5 transition-transform group-hover:translate-x-0.5" />
-                  </Link>
+                  <ApiKeySetup onKeySaved={onKeySaved} />
                 </div>
               </div>
             </div>
@@ -661,34 +788,13 @@ function ChatPanel({
             {/* Error display */}
             {error && (
               /No API key found|api[._-]key|auth.profiles|FailoverError|Configure auth/i.test(error.message) ? (
-                /* Friendly API key error — inline card */
-                <div className="mb-6 overflow-hidden rounded-xl border border-[var(--accent-brand-border)]/60 bg-card shadow-sm animate-modal-in">
-                  <div className="flex items-center gap-2.5 border-b border-[var(--accent-brand-border)]/40 bg-[var(--accent-brand-subtle)] px-4 py-2.5">
+                /* Friendly API key error — inline setup */
+                <div className="mb-6 overflow-hidden rounded-xl border border-[var(--accent-brand-border)]/60 bg-card p-4 shadow-sm animate-modal-in">
+                  <div className="mb-3 flex items-center gap-2">
                     <KeyRound className="h-3.5 w-3.5 text-[var(--accent-brand-text)]" />
-                    <span className="text-xs font-medium text-[var(--accent-brand-text)]">API key missing</span>
+                    <span className="text-xs font-medium text-[var(--accent-brand-text)]">Your agent needs an API key to reply</span>
                   </div>
-                  <div className="px-4 py-3.5">
-                    <p className="text-xs leading-relaxed text-muted-foreground">
-                      Your agent needs an API key to reply. Grab one from a provider
-                      like{" "}
-                      <a href="https://platform.openai.com/api-keys" target="_blank" rel="noopener noreferrer" className="font-medium text-[var(--accent-brand-text)] underline decoration-[var(--accent-brand-border)] underline-offset-2 hover:text-[var(--accent-brand)]">
-                        OpenAI
-                      </a>{" "}
-                      or{" "}
-                      <a href="https://console.anthropic.com/settings/keys" target="_blank" rel="noopener noreferrer" className="font-medium text-[var(--accent-brand-text)] underline decoration-[var(--accent-brand-border)] underline-offset-2 hover:text-[var(--accent-brand)]">
-                        Anthropic
-                      </a>
-                      , then paste it in Settings.
-                    </p>
-                    <Link
-                      href="/accounts"
-                      className="mt-3 inline-flex items-center gap-1.5 rounded-lg bg-[var(--accent-brand)] px-3.5 py-1.5 text-xs font-medium text-[var(--accent-brand-on)] transition-all hover:opacity-90 hover:shadow-sm"
-                    >
-                      <KeyRound className="h-3 w-3" />
-                      Add API Key
-                      <ArrowRight className="h-3 w-3" />
-                    </Link>
-                  </div>
+                  <ApiKeySetup onKeySaved={onKeySaved} compact />
                 </div>
               ) : (
                 /* Generic error */
@@ -955,7 +1061,7 @@ export function ChatView({ isVisible = true }: { isVisible?: boolean }) {
     return () => clearInterval(interval);
   }, [fetchAgents, isVisible]);
 
-  useEffect(() => {
+  const fetchModels = useCallback(() => {
     fetch("/api/models?scope=configured", { cache: "no-store" })
       .then((r) => r.json())
       .then((data) => {
@@ -972,6 +1078,10 @@ export function ChatView({ isVisible = true }: { isVisible?: boolean }) {
       .catch(() => { })
       .finally(() => setModelsLoaded(true));
   }, []);
+
+  useEffect(() => {
+    fetchModels();
+  }, [fetchModels]);
 
   useEffect(() => {
     if (!isVisible) return;
@@ -1141,6 +1251,7 @@ export function ChatView({ isVisible = true }: { isVisible?: boolean }) {
             isVisible={isVisible}
             availableModels={availableModels}
             modelsLoaded={modelsLoaded}
+            onKeySaved={fetchModels}
           />
         );
       })}
