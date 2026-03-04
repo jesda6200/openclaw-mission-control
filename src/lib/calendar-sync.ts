@@ -167,11 +167,11 @@ export async function syncCalendarAccount(
   accountId: string,
   days = 14
 ): Promise<CalendarSyncResult> {
-  const store = await readCalendarStore();
-  const account = store.accounts.find((candidate) => candidate.id === accountId);
+  const initialStore = await readCalendarStore();
+  const account = initialStore.accounts.find((candidate) => candidate.id === accountId);
   if (!account) throw new Error(`Calendar account not found: ${accountId}`);
 
-  const providerSettings = store.providerSettings[account.provider];
+  const providerSettings = initialStore.providerSettings[account.provider];
   if (!providerSettings.enabled) {
     throw new Error(`${getCalendarProviderLabel(account.provider)} imports are disabled.`);
   }
@@ -182,8 +182,22 @@ export async function syncCalendarAccount(
   try {
     const importedEvents = await fetchImportedEventsForAccount(account, Math.max(1, Math.min(days, 60)));
     const syncedAt = Date.now();
-    const nextStore = replaceImportedEventsForAccount(store, {
-      provider: account.provider,
+    const latestStore = await readCalendarStore();
+    const latestAccount = latestStore.accounts.find((candidate) => candidate.id === accountId);
+    if (!latestAccount) {
+      throw new Error(`Calendar account was removed during sync: ${accountId}`);
+    }
+
+    const latestProviderSettings = latestStore.providerSettings[latestAccount.provider];
+    if (!latestProviderSettings.enabled) {
+      throw new Error(`${getCalendarProviderLabel(latestAccount.provider)} imports were disabled during sync.`);
+    }
+    if (!latestAccount.enabled || !latestAccount.importEvents) {
+      throw new Error(`Calendar account ${latestAccount.label} was disabled during sync.`);
+    }
+
+    const nextStore = replaceImportedEventsForAccount(latestStore, {
+      provider: latestAccount.provider,
       accountId,
       importedEvents,
       syncedAt,
