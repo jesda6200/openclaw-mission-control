@@ -38,6 +38,7 @@ import {
   withTimeFormat,
   type TimeFormatPreference,
 } from "@/lib/time-format-preference";
+import { getFriendlyModelName, getModelOptions } from "@/lib/model-metadata";
 
 /* ── types ────────────────────────────────────────── */
 
@@ -84,6 +85,8 @@ type RunOutputState = {
   output: string;
   runStartedAtMs: number;
 };
+
+type DeliveryMode = "announce" | "webhook" | "none";
 
 /* ── helpers ──────────────────────────────────────── */
 
@@ -267,6 +270,104 @@ function mergeSessionOutput(existing: string, incoming: string): string {
   return `${basePrefix}${SESSION_OUTPUT_MARKER}\n\n${nextSession}`;
 }
 
+function normalizeDeliveryMode(value: string | null | undefined): DeliveryMode {
+  const mode = String(value || "").trim().toLowerCase();
+  if (mode === "announce" || mode === "webhook" || mode === "none") {
+    return mode;
+  }
+  return "none";
+}
+
+function isValidWebhookUrl(value: string): boolean {
+  try {
+    const parsed = new URL(value);
+    return parsed.protocol === "http:" || parsed.protocol === "https:";
+  } catch {
+    return false;
+  }
+}
+
+function inferChannelFromTarget(target: string): string {
+  const value = String(target || "").trim().toLowerCase();
+  if (!value) return "";
+  if (value.startsWith("telegram:")) return "telegram";
+  if (value.startsWith("discord:")) return "discord";
+  if (value.startsWith("slack:")) return "slack";
+  if (value.startsWith("webchat:")) return "webchat";
+  if (value.startsWith("web:")) return "web";
+  if (value.startsWith("signal:")) return "signal";
+  if (value.startsWith("+")) return "phone";
+  return "";
+}
+
+function targetMatchesChannel(target: string, channel: string): boolean {
+  if (!target || !channel || channel === "last") return true;
+  const inferred = inferChannelFromTarget(target);
+  if (!inferred) return true;
+  if (inferred === "phone") {
+    return channel === "whatsapp" || channel === "signal";
+  }
+  return inferred === channel;
+}
+
+function getDeliveryChannelLabel(channel: string | undefined): string {
+  if (!channel || channel === "last") return "Last route";
+  return channel;
+}
+
+function getRecipientLabel(mode: DeliveryMode): string {
+  return mode === "webhook" ? "Webhook URL" : "Recipient";
+}
+
+function getRecipientPlaceholder(mode: DeliveryMode, channel: string): string {
+  if (mode === "webhook") return "https://example.com/webhook";
+  if (!channel || channel === "last") return "Use the last active route or enter a target manually";
+  return CHANNEL_PLACEHOLDER[channel] || "channel:TARGET_ID";
+}
+
+function getDeliveryNote(
+  mode: DeliveryMode,
+  channel: string,
+  to: string,
+): { tone: "info" | "warning"; message: string } | null {
+  if (mode === "none") return null;
+  if (mode === "webhook") {
+    if (!to.trim()) {
+      return {
+        tone: "warning",
+        message: "Webhook delivery needs a destination URL.",
+      };
+    }
+    if (!isValidWebhookUrl(to.trim())) {
+      return {
+        tone: "warning",
+        message: "Webhook URL must start with http:// or https://",
+      };
+    }
+    return null;
+  }
+  if (!to.trim()) {
+    return {
+      tone: "info",
+      message:
+        channel === "last" || !channel
+          ? "No explicit recipient set. OpenClaw will fall back to the last route when one is available."
+          : `No explicit recipient set. OpenClaw will use the ${channel} route context if one is available, or fall back to the last route.`,
+    };
+  }
+  return null;
+}
+
+function isReadyChannel(channel: ChannelInfo): boolean {
+  if (channel.setupType === "auto") return true;
+  if (!channel.enabled && !channel.configured) return false;
+  if (channel.enabled) {
+    if (channel.statuses.some((status) => status.connected || status.linked)) return true;
+    if (channel.statuses.some((status) => status.error)) return false;
+  }
+  return channel.configured || channel.enabled;
+}
+
 function describeDelivery(
   d: CronJob["delivery"] | null | undefined,
 ): {
@@ -275,18 +376,27 @@ function describeDelivery(
   issue?: string;
 } {
   const safe = d ?? { mode: "none" as const };
-  if (!safe.mode || safe.mode === "none")
+  const mode = normalizeDeliveryMode(safe.mode);
+  if (mode === "none")
     return { label: "No delivery", hasIssue: false };
-  const parts: string[] = [safe.mode];
-  if (safe.channel) parts.push(`→ ${safe.channel}`);
-  if (safe.to) parts.push(`→ ${safe.to}`);
-  const hasIssue = safe.mode === "announce" && !safe.to;
+  if (mode === "webhook") {
+    const target = String(safe.to || "").trim();
+    const hasIssue = !target || !isValidWebhookUrl(target);
+    return {
+      label: target ? `webhook → ${target}` : "webhook",
+      hasIssue,
+      issue: hasIssue
+        ? "Webhook delivery requires a valid http:// or https:// URL."
+        : undefined,
+    };
+  }
+  const parts: string[] = ["announce", "→", getDeliveryChannelLabel(safe.channel)];
+  if (safe.to) parts.push("→", safe.to);
+  const note = getDeliveryNote("announce", String(safe.channel || "last"), String(safe.to || ""));
   return {
     label: parts.join(" "),
-    hasIssue,
-    issue: hasIssue
-      ? 'Missing delivery target ("to"). The job will fail after completing.'
-      : undefined,
+    hasIssue: note?.tone === "warning",
+    issue: note?.tone === "warning" ? note.message : undefined,
   };
 }
 
@@ -596,14 +706,18 @@ function EditCronForm({
   onSave,
   onCancel,
   onDelete,
+  onMessageAutoSave,
 }: {
   job: CronJob;
-  onSave: (updates: Record<string, unknown>) => void;
+  onSave: (updates: Record<string, unknown>) => Promise<boolean>;
   onCancel: () => void;
-  onDelete: () => void;
+  onDelete: () => Promise<boolean>;
+  onMessageAutoSave?: (message: string) => Promise<void>;
 }) {
   const [name, setName] = useState(job.name);
   const [message, setMessage] = useState(job.payload.message || "");
+  const [messageSaveStatus, setMessageSaveStatus] = useState<null | "unsaved" | "saving" | "saved">(null);
+  const messageSaveTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [schedType, setSchedType] = useState(job.schedule.kind);
   const [cronExpr, setCronExpr] = useState(job.schedule.expr || "");
   const [everyVal, setEveryVal] = useState(
@@ -615,13 +729,19 @@ function EditCronForm({
   const [model, setModel] = useState(job.payload.model || "");
 
   // Delivery
-  const [deliveryMode, setDeliveryMode] = useState(job.delivery.mode || "none");
-  const [channel, setChannel] = useState(job.delivery.channel || "");
+  const initialDeliveryMode = normalizeDeliveryMode(job.delivery.mode);
+  const [deliveryMode, setDeliveryMode] = useState<DeliveryMode>(initialDeliveryMode);
+  const [channel, setChannel] = useState(
+    initialDeliveryMode === "announce" ? job.delivery.channel || "last" : ""
+  );
   const [to, setTo] = useState(job.delivery.to || "");
-  const [customTo, setCustomTo] = useState(false); // true = manual entry mode
+  const [bestEffort, setBestEffort] = useState(Boolean(job.delivery.bestEffort));
+  const [customTo, setCustomTo] = useState(initialDeliveryMode === "webhook");
   const [knownTargets, setKnownTargets] = useState<KnownTarget[]>([]);
   const [channels, setChannels] = useState<ChannelInfo[]>([]);
   const [targetsLoading, setTargetsLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
+  const [deleting, setDeleting] = useState(false);
 
   const [confirmDel, setConfirmDel] = useState(false);
 
@@ -648,49 +768,67 @@ function EditCronForm({
     });
   }, [fetchTargets]);
 
-  const targetChannel = useCallback((t: string) => {
-    if (t.startsWith("telegram:")) return "telegram";
-    if (t.startsWith("discord:")) return "discord";
-    if (t.startsWith("+")) return "whatsapp";
-    return "";
+  useEffect(() => {
+    return () => {
+      if (messageSaveTimeoutRef.current) {
+        clearTimeout(messageSaveTimeoutRef.current);
+        messageSaveTimeoutRef.current = null;
+      }
+    };
   }, []);
 
-  // When channel changes, show dropdown again; clear to only if it was for a different channel
   useEffect(() => {
-    if (!channel) return;
+    if (deliveryMode === "announce" && !channel) {
+      queueMicrotask(() => setChannel("last"));
+      return;
+    }
+    if (deliveryMode !== "announce") {
+      queueMicrotask(() => setCustomTo(deliveryMode === "webhook"));
+      return;
+    }
     queueMicrotask(() => {
       setCustomTo(false);
-      if (to && targetChannel(to) !== channel) setTo("");
+      if (to && !targetMatchesChannel(to, channel)) setTo("");
     });
-  }, [channel, to, targetChannel]);
+  }, [channel, deliveryMode, to]);
 
   const readyChannels = useMemo(() => {
-    return channels.filter((ch) => {
-      if (ch.setupType === "auto") return true;
-      if (!ch.enabled && !ch.configured) return false;
-      if (ch.enabled) {
-        if (ch.statuses.some((s) => s.connected || s.linked)) return true;
-        if (ch.statuses.some((s) => s.error)) return false;
-      }
-      return ch.configured || ch.enabled;
-    });
+    return channels.filter((ch) => isReadyChannel(ch));
   }, [channels]);
   const readyChannelKeys = useMemo(
     () => new Set(readyChannels.map((c) => c.channel)),
     [readyChannels]
   );
 
-  // Filter targets by selected channel
   const filteredTargets = useMemo(() => {
+    if (deliveryMode !== "announce") return [];
     const base = knownTargets.filter(
-      (t) => !t.channel || readyChannelKeys.has(t.channel)
+      (t) => {
+        const knownChannel = t.channel || inferChannelFromTarget(t.target);
+        if (!knownChannel) return true;
+        if (knownChannel === "phone") {
+          return readyChannelKeys.has("whatsapp") || readyChannelKeys.has("signal");
+        }
+        return readyChannelKeys.has(knownChannel);
+      }
     );
-    if (!channel) return base;
-    return base.filter((t) => t.channel === channel || !t.channel);
-  }, [knownTargets, channel, readyChannelKeys]);
+    if (!channel || channel === "last") return base;
+    return base.filter((t) => {
+      const knownChannel = t.channel || inferChannelFromTarget(t.target);
+      if (!knownChannel) return true;
+      if (knownChannel === "phone") {
+        return channel === "whatsapp" || channel === "signal";
+      }
+      return knownChannel === channel;
+    });
+  }, [channel, deliveryMode, knownTargets, readyChannelKeys]);
 
-  // If the current `to` value isn't in the known targets, switch to custom mode
   useEffect(() => {
+    if (deliveryMode === "webhook") {
+      queueMicrotask(() => setCustomTo(true));
+      return;
+    }
+    if (deliveryMode !== "announce") return;
     if (!targetsLoading && to && filteredTargets.length > 0) {
       const found = filteredTargets.some((t) => t.target === to);
       if (!found) queueMicrotask(() => setCustomTo(true));
@@ -698,9 +836,9 @@ function EditCronForm({
     if (!targetsLoading && filteredTargets.length === 0) {
       queueMicrotask(() => setCustomTo(true));
     }
-  }, [targetsLoading, to, filteredTargets]);
+  }, [deliveryMode, targetsLoading, to, filteredTargets]);
 
-  const save = () => {
+  const save = async () => {
     const updates: Record<string, unknown> = {};
     if (name !== job.name) updates.name = name;
     if (message !== (job.payload.message || "")) updates.message = message;
@@ -708,25 +846,35 @@ function EditCronForm({
       updates.cron = cronExpr;
     if (schedType === "every" && everyVal) updates.every = everyVal;
     if (tz && tz !== (job.schedule.tz || "")) updates.tz = tz;
-    if (model && model !== (job.payload.model || "")) updates.model = model;
+    if (model !== (job.payload.model || "")) updates.model = model;
 
-    // Delivery updates
-    if (deliveryMode === "announce") {
-      updates.announce = true;
-      if (channel && channel !== (job.delivery.channel || ""))
-        updates.channel = channel;
-      if (to !== (job.delivery.to || "")) updates.to = to;
-    } else if (deliveryMode === "none") {
-      if (job.delivery.mode === "announce") updates.announce = false;
+    const currentDeliveryMode = normalizeDeliveryMode(job.delivery.mode);
+    const currentChannel = currentDeliveryMode === "announce" ? job.delivery.channel || "last" : "";
+    const currentTo = job.delivery.to || "";
+    const currentBestEffort = Boolean(job.delivery.bestEffort);
+    if (
+      deliveryMode !== currentDeliveryMode ||
+      (deliveryMode === "announce" && channel !== currentChannel) ||
+      (deliveryMode !== "none" && to !== currentTo) ||
+      (deliveryMode !== "none" && bestEffort !== currentBestEffort)
+    ) {
+      updates.deliveryMode = deliveryMode;
+      updates.channel = deliveryMode === "announce" ? channel : "";
+      updates.to = deliveryMode === "none" ? "" : to;
+      updates.bestEffort = deliveryMode === "none" ? false : bestEffort;
     }
 
-    onSave(updates);
+    setSaving(true);
+    try {
+      await onSave(updates);
+    } finally {
+      setSaving(false);
+    }
   };
 
-  const deliveryIssue =
-    deliveryMode === "announce" && !to
-      ? "Without a target, delivery will fail. Set a recipient (e.g. telegram:YOUR_CHAT_ID)"
-      : null;
+  const deliveryNote = getDeliveryNote(deliveryMode, channel, to);
+  const saveDisabled =
+    saving || (deliveryMode === "webhook" && !isValidWebhookUrl(to.trim()));
 
   return (
     <div className="border-t border-foreground/10 bg-card/70 px-4 py-4 space-y-4">
@@ -742,16 +890,63 @@ function EditCronForm({
         />
       </div>
 
-      {/* Prompt / Message */}
+      {/* Prompt / Message — editable with auto-save like /documents */}
       <div>
-        <label className="mb-1 block text-xs font-medium uppercase tracking-wider text-muted-foreground/80">
-          Prompt / Message
-        </label>
+        <div className="mb-1 flex items-center justify-between gap-2">
+          <label className="text-xs font-medium uppercase tracking-wider text-muted-foreground/80">
+            Prompt / Message
+          </label>
+          {onMessageAutoSave && messageSaveStatus && (
+            <span className={cn(
+              "text-xs",
+              messageSaveStatus === "saving" && "text-amber-600 dark:text-amber-400",
+              messageSaveStatus === "saved" && "text-emerald-600 dark:text-emerald-400",
+              messageSaveStatus === "unsaved" && "text-muted-foreground"
+            )}>
+              {messageSaveStatus === "saving" && "Saving…"}
+              {messageSaveStatus === "saved" && "Saved"}
+              {messageSaveStatus === "unsaved" && "Unsaved"}
+            </span>
+          )}
+        </div>
         <textarea
           value={message}
-          onChange={(e) => setMessage(e.target.value)}
+          onChange={(e) => {
+            const val = e.target.value;
+            setMessage(val);
+            if (!onMessageAutoSave) return;
+            setMessageSaveStatus("unsaved");
+            if (messageSaveTimeoutRef.current) clearTimeout(messageSaveTimeoutRef.current);
+            messageSaveTimeoutRef.current = setTimeout(async () => {
+              messageSaveTimeoutRef.current = null;
+              setMessageSaveStatus("saving");
+              try {
+                await onMessageAutoSave(val);
+                setMessageSaveStatus("saved");
+                setTimeout(() => setMessageSaveStatus(null), 2000);
+              } catch {
+                setMessageSaveStatus("unsaved");
+              }
+            }, 400);
+          }}
+          onKeyDown={(e) => {
+            if ((e.metaKey || e.ctrlKey) && e.key === "s") {
+              e.preventDefault();
+              if (!onMessageAutoSave) return;
+              if (messageSaveTimeoutRef.current) {
+                clearTimeout(messageSaveTimeoutRef.current);
+                messageSaveTimeoutRef.current = null;
+              }
+              setMessageSaveStatus("saving");
+              onMessageAutoSave(message).then(() => {
+                setMessageSaveStatus("saved");
+                setTimeout(() => setMessageSaveStatus(null), 2000);
+              }).catch(() => setMessageSaveStatus("unsaved"));
+            }
+          }}
           rows={5}
           className="w-full resize-y rounded-lg border border-stone-200 bg-stone-50 px-3 py-2 text-xs leading-5 text-stone-900 outline-none focus:border-emerald-500/30 dark:border-[#2c343d] dark:bg-[#15191d] dark:text-[#f5f7fa]"
+          placeholder="Instructions or prompt for the agent run…"
         />
       </div>
 
@@ -824,10 +1019,11 @@ function EditCronForm({
               </label>
               <select
                 value={deliveryMode}
-                onChange={(e) => setDeliveryMode(e.target.value)}
+                onChange={(e) => setDeliveryMode(e.target.value as DeliveryMode)}
                 className="w-full rounded-lg border border-foreground/10 bg-muted/80 px-3 py-2 text-xs text-foreground/90 outline-none"
               >
                 <option value="announce">Announce (send summary)</option>
+                <option value="webhook">Webhook</option>
                 <option value="none">No delivery</option>
               </select>
             </div>
@@ -838,16 +1034,16 @@ function EditCronForm({
               <select
                 value={channel}
                 onChange={(e) => setChannel(e.target.value)}
-                disabled={deliveryMode === "none"}
+                disabled={deliveryMode !== "announce"}
                 className="w-full rounded-lg border border-foreground/10 bg-muted/80 px-3 py-2 text-xs text-foreground/90 outline-none disabled:opacity-40"
               >
-                <option value="">Select channel</option>
+                <option value="last">Last route</option>
                 {readyChannels.map((ch) => (
                   <option key={ch.channel} value={ch.channel}>
                     {ch.label || ch.channel}
                   </option>
                 ))}
-                {channel && !readyChannelKeys.has(channel) && (
+                {channel && channel !== "last" && !readyChannelKeys.has(channel) && (
                   <option value={channel}>
                     {channel} (currently unavailable)
                   </option>
@@ -857,9 +1053,9 @@ function EditCronForm({
             <div>
               <div className="mb-1 flex items-center justify-between gap-2">
                 <label className="block text-xs text-muted-foreground">
-                  To (recipient)
+                  {getRecipientLabel(deliveryMode)}
                 </label>
-                {deliveryMode !== "none" && channel && (
+                {deliveryMode === "announce" && (
                   <button
                     type="button"
                     onClick={() => fetchTargets()}
@@ -876,6 +1072,14 @@ function EditCronForm({
                   value=""
                   placeholder="—"
                   className="w-full rounded-lg border border-foreground/10 bg-muted/80 px-3 py-2 font-mono text-xs text-foreground/90 outline-none disabled:opacity-40"
+                />
+              ) : deliveryMode === "webhook" ? (
+                <input
+                  value={to}
+                  onChange={(e) => setTo(e.target.value)}
+                  placeholder={getRecipientPlaceholder(deliveryMode, channel)}
+                  className="w-full rounded-lg border border-stone-200 bg-stone-50 px-3 py-2 font-mono text-xs text-stone-900 outline-none focus:border-emerald-500/30 dark:border-[#2c343d] dark:bg-[#15191d] dark:text-[#f5f7fa]"
+                  aria-label="Webhook URL"
                 />
               ) : targetsLoading && knownTargets.length === 0 ? (
                 <div className="flex h-9 items-center rounded-lg border border-foreground/10 bg-muted/80 px-3">
@@ -915,7 +1119,7 @@ function EditCronForm({
                     <input
                       value={to}
                       onChange={(e) => setTo(e.target.value)}
-                      placeholder={CHANNEL_PLACEHOLDER[channel] || "channel:TARGET_ID"}
+                      placeholder={getRecipientPlaceholder(deliveryMode, channel)}
                       className="w-full rounded-lg border border-stone-200 bg-stone-50 px-3 py-2 font-mono text-xs text-stone-900 outline-none focus:border-emerald-500/30 dark:border-[#2c343d] dark:bg-[#15191d] dark:text-[#f5f7fa]"
                       aria-label="Recipient (e.g. discord:CHANNEL_ID)"
                     />
@@ -931,22 +1135,46 @@ function EditCronForm({
             </div>
           </div>
 
-          {/* Warning for missing target */}
-          {deliveryIssue && (
-            <div className="flex items-start gap-2 rounded-lg bg-amber-500/10 px-3 py-2">
-              <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0 text-amber-700 dark:text-amber-300" />
-              <div>
-                <p className="text-xs font-medium text-amber-700 dark:text-amber-200">
-                  Missing delivery target
-                </p>
-                <p className="text-xs text-amber-700/80 dark:text-amber-100/90">
-                  {deliveryIssue}
-                </p>
-              </div>
+          {deliveryMode !== "none" && (
+            <label className="flex items-center gap-2 cursor-pointer">
+              <input
+                type="checkbox"
+                checked={bestEffort}
+                onChange={(e) => setBestEffort(e.target.checked)}
+                className="h-3.5 w-3.5 rounded border-foreground/20 bg-muted/80 text-emerald-600 focus:ring-emerald-500/30 dark:text-emerald-300"
+              />
+              <span className="text-xs text-muted-foreground/70">
+                Best effort delivery (don&apos;t fail the job if delivery fails)
+              </span>
+            </label>
+          )}
+
+          {deliveryNote && (
+            <div
+              className={cn(
+                "flex items-start gap-2 rounded-lg px-3 py-2",
+                deliveryNote.tone === "warning" ? "bg-amber-500/10" : "bg-sky-500/10"
+              )}
+            >
+              {deliveryNote.tone === "warning" ? (
+                <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0 text-amber-700 dark:text-amber-300" />
+              ) : (
+                <Info className="mt-0.5 h-3.5 w-3.5 shrink-0 text-sky-700 dark:text-sky-300" />
+              )}
+              <p
+                className={cn(
+                  "text-xs",
+                  deliveryNote.tone === "warning"
+                    ? "text-amber-700/80 dark:text-amber-100/90"
+                    : "text-sky-700/80 dark:text-sky-100/90"
+                )}
+              >
+                {deliveryNote.message}
+              </p>
             </div>
           )}
 
-          {customTo && (
+          {customTo && deliveryMode === "announce" && (
             <p className="text-xs text-muted-foreground/70">
               Format: <code className="text-muted-foreground/80">telegram:CHAT_ID</code>,{" "}
               <code className="text-muted-foreground/80">+15555550123</code> (WhatsApp),{" "}
@@ -965,12 +1193,43 @@ function EditCronForm({
             (optional — leave blank for default)
           </span>
         </label>
-        <input
+        <select
           value={model}
           onChange={(e) => setModel(e.target.value)}
-          placeholder="e.g. minimax-portal/MiniMax-M2.5"
-          className="w-full rounded-lg border border-stone-200 bg-stone-50 px-3 py-2 font-mono text-xs text-stone-900 outline-none focus:border-emerald-500/30 dark:border-[#2c343d] dark:bg-[#15191d] dark:text-[#f5f7fa]"
-        />
+          className="w-full rounded-lg border border-stone-200 bg-stone-50 px-3 py-2 text-xs text-stone-900 outline-none focus:border-emerald-500/30 dark:border-[#2c343d] dark:bg-[#15191d] dark:text-[#f5f7fa]"
+        >
+          <option value="">Default (no override)</option>
+          {(() => {
+            const opts = getModelOptions();
+            const groups = new Map<string, typeof opts>();
+            for (const o of opts) {
+              if (!groups.has(o.provider)) groups.set(o.provider, []);
+              groups.get(o.provider)!.push(o);
+            }
+            // If current model isn't in the known list, add it as a fallback
+            if (model && !opts.some((o) => o.key === model)) {
+              return (
+                <>
+                  <option value={model}>{getFriendlyModelName(model)}</option>
+                  {[...groups.entries()].map(([provider, models]) => (
+                    <optgroup key={provider} label={provider}>
+                      {models.map((m) => (
+                        <option key={m.key} value={m.key}>{m.displayName}</option>
+                      ))}
+                    </optgroup>
+                  ))}
+                </>
+              );
+            }
+            return [...groups.entries()].map(([provider, models]) => (
+              <optgroup key={provider} label={provider}>
+                {models.map((m) => (
+                  <option key={m.key} value={m.key}>{m.displayName}</option>
+                ))}
+              </optgroup>
+            ));
+          })()}
+        </select>
       </div>
 
       {/* Actions */}
@@ -979,10 +1238,18 @@ function EditCronForm({
           <>
             <button
               type="button"
-              onClick={onDelete}
+              onClick={async () => {
+                setDeleting(true);
+                try {
+                  await onDelete();
+                } finally {
+                  setDeleting(false);
+                }
+              }}
+              disabled={deleting}
               className="rounded bg-red-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-red-500"
             >
-              Confirm Delete
+              {deleting ? "Deleting..." : "Confirm Delete"}
             </button>
             <button
               type="button"
@@ -1012,9 +1279,10 @@ function EditCronForm({
         <button
           type="button"
           onClick={save}
-          className="flex items-center gap-1 rounded bg-primary text-primary-foreground px-4 py-1.5 text-xs font-medium hover:bg-primary/90"
+          disabled={saveDisabled}
+          className="flex items-center gap-1 rounded bg-primary text-primary-foreground px-4 py-1.5 text-xs font-medium hover:bg-primary/90 disabled:cursor-not-allowed disabled:opacity-50"
         >
-          <Check className="h-3 w-3" /> Save Changes
+          <Check className="h-3 w-3" /> {saving ? "Saving..." : "Save Changes"}
         </button>
       </div>
     </div>
@@ -1093,8 +1361,8 @@ function CreateCronForm({
   const [message, setMessage] = useState("");
   const [model, setModel] = useState("");
   const [thinking, setThinking] = useState("");
-  const [deliveryMode, setDeliveryMode] = useState<"announce" | "none">("announce");
-  const [channel, setChannel] = useState("");
+  const [deliveryMode, setDeliveryMode] = useState<DeliveryMode>("announce");
+  const [channel, setChannel] = useState("last");
   const [to, setTo] = useState("");
   const [bestEffort, setBestEffort] = useState(true);
   const [deleteAfterRun, setDeleteAfterRun] = useState(false);
@@ -1139,45 +1407,51 @@ function CreateCronForm({
     void fetchTargetsCreate();
   }, [fetchTargetsCreate]);
 
-  const targetChannelCreate = useCallback((t: string) => {
-    if (t.startsWith("telegram:")) return "telegram";
-    if (t.startsWith("discord:")) return "discord";
-    if (t.startsWith("+")) return "whatsapp";
-    return "";
-  }, []);
-
   useEffect(() => {
-    if (!channel) return;
+    if (deliveryMode === "announce" && !channel) {
+      queueMicrotask(() => setChannel("last"));
+      return;
+    }
+    if (deliveryMode !== "announce") {
+      queueMicrotask(() => setCustomTo(deliveryMode === "webhook"));
+      return;
+    }
     queueMicrotask(() => {
       setCustomTo(false);
-      if (to && targetChannelCreate(to) !== channel) setTo("");
+      if (to && !targetMatchesChannel(to, channel)) setTo("");
     });
-  }, [channel, to, targetChannelCreate]);
+  }, [channel, deliveryMode, to]);
 
   const readyChannels = useMemo(() => {
-    return channels.filter((ch) => {
-      if (ch.setupType === "auto") return true;
-      if (!ch.enabled && !ch.configured) return false;
-      if (ch.enabled) {
-        if (ch.statuses.some((s) => s.connected || s.linked)) return true;
-        if (ch.statuses.some((s) => s.error)) return false;
-      }
-      return ch.configured || ch.enabled;
-    });
+    return channels.filter((ch) => isReadyChannel(ch));
   }, [channels]);
   const readyChannelKeys = useMemo(
     () => new Set(readyChannels.map((c) => c.channel)),
     [readyChannels]
   );
 
-  // Filter targets by selected channel
   const filteredTargets = useMemo(() => {
+    if (deliveryMode !== "announce") return [];
     const base = knownTargets.filter(
-      (t) => !t.channel || readyChannelKeys.has(t.channel)
+      (t) => {
+        const knownChannel = t.channel || inferChannelFromTarget(t.target);
+        if (!knownChannel) return true;
+        if (knownChannel === "phone") {
+          return readyChannelKeys.has("whatsapp") || readyChannelKeys.has("signal");
+        }
+        return readyChannelKeys.has(knownChannel);
+      }
     );
-    if (!channel) return base;
-    return base.filter((t) => t.channel === channel || !t.channel);
-  }, [knownTargets, channel, readyChannelKeys]);
+    if (!channel || channel === "last") return base;
+    return base.filter((t) => {
+      const knownChannel = t.channel || inferChannelFromTarget(t.target);
+      if (!knownChannel) return true;
+      if (knownChannel === "phone") {
+        return channel === "whatsapp" || channel === "signal";
+      }
+      return knownChannel === channel;
+    });
+  }, [channel, deliveryMode, knownTargets, readyChannelKeys]);
 
   // Auto-set deleteAfterRun for "at" schedules
   useEffect(() => {
@@ -1192,6 +1466,27 @@ function CreateCronForm({
     }
   }, [payloadKind]);
 
+  useEffect(() => {
+    if (sessionTarget !== "isolated" && deliveryMode === "announce") {
+      queueMicrotask(() => setDeliveryMode("none"));
+    }
+  }, [deliveryMode, sessionTarget]);
+
+  useEffect(() => {
+    if (deliveryMode === "webhook") {
+      queueMicrotask(() => setCustomTo(true));
+      return;
+    }
+    if (deliveryMode !== "announce") return;
+    if (!targetsLoading && to && filteredTargets.length > 0) {
+      const found = filteredTargets.some((t) => t.target === to);
+      if (!found) queueMicrotask(() => setCustomTo(true));
+    }
+    if (!targetsLoading && filteredTargets.length === 0) {
+      queueMicrotask(() => setCustomTo(true));
+    }
+  }, [deliveryMode, filteredTargets, targetsLoading, to]);
+
   const canAdvance = (): boolean => {
     switch (step) {
       case 1: return name.trim().length > 0;
@@ -1201,7 +1496,9 @@ function CreateCronForm({
         if (scheduleKind === "at") return atTime.trim().length > 0;
         return false;
       case 3: return message.trim().length > 0;
-      case 4: return true; // delivery is optional
+      case 4:
+        if (deliveryMode === "webhook") return isValidWebhookUrl(to.trim());
+        return true;
       default: return true;
     }
   };
@@ -1229,9 +1526,9 @@ function CreateCronForm({
           model: model.trim() || undefined,
           thinking: thinking || undefined,
           deliveryMode,
-          channel: deliveryMode === "announce" ? channel || undefined : undefined,
-          to: deliveryMode === "announce" ? to || undefined : undefined,
-          bestEffort: deliveryMode === "announce" ? bestEffort : undefined,
+          channel: deliveryMode === "announce" ? channel : undefined,
+          to: deliveryMode !== "none" ? to || undefined : undefined,
+          bestEffort: deliveryMode !== "none" ? bestEffort : undefined,
           deleteAfterRun: scheduleKind === "at" ? deleteAfterRun : undefined,
         }),
       });
@@ -1246,6 +1543,8 @@ function CreateCronForm({
     }
     setSubmitting(false);
   };
+
+  const deliveryNote = getDeliveryNote(deliveryMode, channel, to);
 
   return (
     <div className="overflow-hidden rounded-xl border border-stone-200 bg-white shadow-sm dark:border-[#2c343d] dark:bg-[#171a1d]">
@@ -1507,12 +1806,28 @@ function CreateCronForm({
                   <Cpu className="h-3 w-3" />
                   Model Override <span className="font-normal normal-case">(optional)</span>
                 </label>
-                <input
+                <select
                   value={model}
                   onChange={(e) => setModel(e.target.value)}
-                  placeholder="Leave blank for default model"
-                  className="w-full rounded-lg border border-stone-200 bg-stone-50 px-3 py-2 font-mono text-xs text-stone-900 outline-none focus:border-emerald-500/30 dark:border-[#2c343d] dark:bg-[#15191d] dark:text-[#f5f7fa]"
-                />
+                  className="w-full rounded-lg border border-stone-200 bg-stone-50 px-3 py-2 text-xs text-stone-900 outline-none focus:border-emerald-500/30 dark:border-[#2c343d] dark:bg-[#15191d] dark:text-[#f5f7fa]"
+                >
+                  <option value="">Default (no override)</option>
+                  {(() => {
+                    const opts = getModelOptions();
+                    const groups = new Map<string, typeof opts>();
+                    for (const o of opts) {
+                      if (!groups.has(o.provider)) groups.set(o.provider, []);
+                      groups.get(o.provider)!.push(o);
+                    }
+                    return [...groups.entries()].map(([provider, models]) => (
+                      <optgroup key={provider} label={provider}>
+                        {models.map((m) => (
+                          <option key={m.key} value={m.key}>{m.displayName}</option>
+                        ))}
+                      </optgroup>
+                    ));
+                  })()}
+                </select>
               </div>
               <div>
                 <label className="mb-1 block text-xs font-medium uppercase tracking-wider text-muted-foreground/80">
@@ -1543,8 +1858,8 @@ function CreateCronForm({
               <h4 className="text-xs font-medium text-foreground/80 mb-1">Where should results be delivered?</h4>
               <p className="text-xs text-muted-foreground/80 mb-3">
                 {sessionTarget === "isolated"
-                  ? "Isolated jobs can announce results to a messaging channel."
-                  : "Main session jobs usually don't need delivery. You can skip this step."}
+                  ? "Isolated jobs can announce to a channel or post to a webhook."
+                  : "Main session jobs usually do not need delivery, but webhook delivery is available if you want an external callback."}
               </p>
             </div>
 
@@ -1553,10 +1868,13 @@ function CreateCronForm({
                 <label className="mb-1 block text-xs font-medium uppercase tracking-wider text-muted-foreground/80">Mode</label>
                 <select
                   value={deliveryMode}
-                  onChange={(e) => setDeliveryMode(e.target.value as "announce" | "none")}
+                  onChange={(e) => setDeliveryMode(e.target.value as DeliveryMode)}
                   className="w-full rounded-lg border border-foreground/10 bg-muted/80 px-3 py-2 text-xs text-foreground/90 outline-none"
                 >
-                  <option value="announce">Announce (send summary)</option>
+                  {sessionTarget === "isolated" && (
+                    <option value="announce">Announce (send summary)</option>
+                  )}
+                  <option value="webhook">Webhook</option>
                   <option value="none">No delivery</option>
                 </select>
               </div>
@@ -1565,16 +1883,15 @@ function CreateCronForm({
                 <select
                   value={channel}
                   onChange={(e) => setChannel(e.target.value)}
-                  disabled={deliveryMode === "none"}
+                  disabled={deliveryMode !== "announce"}
                   className="w-full rounded-lg border border-foreground/10 bg-muted/80 px-3 py-2 text-xs text-foreground/90 outline-none disabled:opacity-40"
                 >
-                  <option value="">Auto-detect</option>
+                  <option value="last">Last route</option>
                   {readyChannels.map((ch) => (
                     <option key={ch.channel} value={ch.channel}>
                       {ch.label || ch.channel}
                     </option>
                   ))}
-                  <option value="last">Last used channel</option>
                   {channel && channel !== "last" && !readyChannelKeys.has(channel) && (
                     <option value={channel}>
                       {channel} (currently unavailable)
@@ -1585,9 +1902,9 @@ function CreateCronForm({
               <div>
                 <div className="mb-1 flex items-center justify-between gap-2">
                   <label className="block text-xs font-medium uppercase tracking-wider text-muted-foreground/80">
-                    Recipient
+                    {getRecipientLabel(deliveryMode)}
                   </label>
-                  {deliveryMode !== "none" && channel && (
+                  {deliveryMode === "announce" && (
                     <button
                       type="button"
                       onClick={() => fetchTargetsCreate()}
@@ -1600,6 +1917,14 @@ function CreateCronForm({
                 </div>
                 {deliveryMode === "none" ? (
                   <input disabled value="" placeholder="—" className="w-full rounded-lg border border-foreground/10 bg-muted/80 px-3 py-2 font-mono text-xs text-foreground/90 outline-none disabled:opacity-40" />
+                ) : deliveryMode === "webhook" ? (
+                  <input
+                    value={to}
+                    onChange={(e) => setTo(e.target.value)}
+                    placeholder={getRecipientPlaceholder(deliveryMode, channel)}
+                    className="w-full rounded-lg border border-stone-200 bg-stone-50 px-3 py-2 font-mono text-xs text-stone-900 outline-none focus:border-emerald-500/30 dark:border-[#2c343d] dark:bg-[#15191d] dark:text-[#f5f7fa]"
+                    aria-label="Webhook URL"
+                  />
                 ) : targetsLoading && knownTargets.length === 0 ? (
                   <div className="flex h-9 items-center rounded-lg border border-foreground/10 bg-muted/80 px-3">
                     <InlineSpinner size="sm" />
@@ -1628,11 +1953,7 @@ function CreateCronForm({
                       <input
                         value={to}
                         onChange={(e) => setTo(e.target.value)}
-                        placeholder={
-                          channel === "last"
-                            ? "Auto from last active channel"
-                            : CHANNEL_PLACEHOLDER[channel] || "channel:TARGET_ID"
-                        }
+                        placeholder={getRecipientPlaceholder(deliveryMode, channel)}
                         className="w-full rounded-lg border border-stone-200 bg-stone-50 px-3 py-2 font-mono text-xs text-stone-900 outline-none focus:border-emerald-500/30 dark:border-[#2c343d] dark:bg-[#15191d] dark:text-[#f5f7fa]"
                         aria-label="Recipient (e.g. discord:CHANNEL_ID)"
                       />
@@ -1648,7 +1969,7 @@ function CreateCronForm({
               </div>
             </div>
 
-            {deliveryMode === "announce" && (
+            {deliveryMode !== "none" && (
               <label className="flex items-center gap-2 cursor-pointer">
                 <input
                   type="checkbox"
@@ -1660,11 +1981,27 @@ function CreateCronForm({
               </label>
             )}
 
-            {deliveryMode === "announce" && !to && (
-              <div className="flex items-start gap-2 rounded-lg bg-amber-500/10 px-3 py-2">
-                <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0 text-amber-700 dark:text-amber-300" />
-                <p className="text-xs text-amber-700/80 dark:text-amber-100/90">
-                  No recipient set. The job will run but delivery may fail unless you set a target or use &quot;last&quot; channel.
+            {deliveryNote && (
+              <div
+                className={cn(
+                  "flex items-start gap-2 rounded-lg px-3 py-2",
+                  deliveryNote.tone === "warning" ? "bg-amber-500/10" : "bg-sky-500/10"
+                )}
+              >
+                {deliveryNote.tone === "warning" ? (
+                  <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0 text-amber-700 dark:text-amber-300" />
+                ) : (
+                  <Info className="mt-0.5 h-3.5 w-3.5 shrink-0 text-sky-700 dark:text-sky-300" />
+                )}
+                <p
+                  className={cn(
+                    "text-xs",
+                    deliveryNote.tone === "warning"
+                      ? "text-amber-700/80 dark:text-amber-100/90"
+                      : "text-sky-700/80 dark:text-sky-100/90"
+                  )}
+                >
+                  {deliveryNote.message}
                 </p>
               </div>
             )}
@@ -1730,9 +2067,12 @@ function CreateCronForm({
                 <span className="text-xs text-foreground/90">
                   {deliveryMode === "none" ? (
                     "No delivery"
+                  ) : deliveryMode === "webhook" ? (
+                    <>Webhook → {to || <span className="text-amber-700 dark:text-amber-300">not set</span>}</>
                   ) : (
                     <>
-                      {channel || "auto"} → {to || <span className="text-amber-700 dark:text-amber-300">not set</span>}
+                      {getDeliveryChannelLabel(channel)} →{" "}
+                      {to || <span className="text-sky-700 dark:text-sky-300">last route fallback</span>}
                     </>
                   )}
                 </span>
@@ -1818,6 +2158,7 @@ export function CronView() {
   >({});
   const runOutputRef = useRef<HTMLPreElement | null>(null);
   const toastTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const runPollTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const didAutoExpand = useRef(false);
   const didAutoFocusJob = useRef<string | null>(null);
 
@@ -1862,6 +2203,20 @@ export function CronView() {
     }
     setLoading(false);
   }, []);
+
+  const saveCronField = useCallback(
+    async (jobId: string, updates: Record<string, unknown>) => {
+      const res = await fetch("/api/cron", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action: "edit", id: jobId, ...updates }),
+      });
+      const data = await res.json();
+      if (!data.ok) throw new Error((data.error as string) || "Save failed");
+      await fetchJobs();
+    },
+    [fetchJobs]
+  );
 
   useEffect(() => {
     queueMicrotask(() => fetchJobs());
@@ -1927,7 +2282,7 @@ export function CronView() {
   };
 
   const doAction = useCallback(
-    async (action: string, id: string, extra?: Record<string, unknown>) => {
+    async (action: string, id: string, extra?: Record<string, unknown>): Promise<boolean> => {
       setActionLoading(`${action}-${id}`);
       if (action === "run") {
         const startedAt = Date.now();
@@ -1946,19 +2301,81 @@ export function CronView() {
         });
         const data = await res.json();
         if (action === "run") {
+          const runStartedAtMs = Date.now();
           const cliOutput = data.output ?? data.error ?? "";
           const initialOutput =
             typeof cliOutput === "string" ? cliOutput : String(cliOutput);
-          setRunOutput((prev) => ({
-            ...prev,
-            [id]: {
-              status: data.ok ? "done" : "error",
-              output: initialOutput,
-              runStartedAtMs: prev[id]?.runStartedAtMs || Date.now(),
-            },
-          }));
-          // Poll for real session output (agent transcript) — run may finish shortly after CLI returns
-          if (data.ok) {
+          if (!data.ok) {
+            setRunOutput((prev) => ({
+              ...prev,
+              [id]: {
+                status: "error",
+                output: initialOutput,
+                runStartedAtMs: prev[id]?.runStartedAtMs || runStartedAtMs,
+              },
+            }));
+          } else {
+            setRunOutput((prev) => ({
+              ...prev,
+              [id]: {
+                status: "running",
+                output: initialOutput,
+                runStartedAtMs: prev[id]?.runStartedAtMs || runStartedAtMs,
+              },
+            }));
+            // Poll for actual run result so we show error when the job fails, not just "launch" success
+            const pollStarted = Date.now();
+            const POLL_INTERVAL_MS = 2000;
+            const POLL_MAX_MS = 60000;
+            const poll = async () => {
+              try {
+                const r = await fetch("/api/cron");
+                const listData = await r.json();
+                const jobList = Array.isArray(listData.jobs) ? listData.jobs as CronJob[] : [];
+                const job = jobList.find((j) => j.id === id);
+                const lastRunAtMs = job?.state?.lastRunAtMs;
+                const lastStatus = job?.state?.lastStatus;
+                const lastError = job?.state?.lastError;
+                if (lastRunAtMs != null && lastRunAtMs >= runStartedAtMs - 2000) {
+                  const isError = lastStatus === "error";
+                  setRunOutput((prev) => {
+                    const cur = prev[id];
+                    if (!cur || cur.status !== "running") return prev;
+                    const errText = (lastError && String(lastError).trim()) || "Run failed.";
+                    return {
+                      ...prev,
+                      [id]: {
+                        ...cur,
+                        status: isError ? "error" : "done",
+                        output: isError ? (cur.output ? `${cur.output}\n\n${errText}` : errText) : cur.output,
+                      },
+                    };
+                  });
+                  if (runPollTimerRef.current) {
+                    clearTimeout(runPollTimerRef.current);
+                    runPollTimerRef.current = null;
+                  }
+                  return;
+                }
+              } catch {
+                /* ignore */
+              }
+              if (Date.now() - pollStarted < POLL_MAX_MS) {
+                runPollTimerRef.current = setTimeout(poll, POLL_INTERVAL_MS);
+              } else {
+                setRunOutput((prev) => {
+                  const cur = prev[id];
+                  if (!cur || cur.status !== "running") return prev;
+                  return {
+                    ...prev,
+                    [id]: { ...cur, status: "done", output: (cur.output || "") + "\n\n(Status unknown — run may still be in progress.)" },
+                  };
+                });
+                runPollTimerRef.current = null;
+              }
+            };
+            runPollTimerRef.current = setTimeout(poll, POLL_INTERVAL_MS);
+            // Poll for real session output (agent transcript)
             const pollDelays = [3000, 6000, 10000];
             pollDelays.forEach((delay) => {
               setTimeout(async () => {
@@ -1993,7 +2410,8 @@ export function CronView() {
           }
         }
         if (data.ok) {
-          flash(`${action} successful`);
+          if (action !== "run") flash(`${action} successful`);
+          else flash("Run started");
           fetchJobs();
           if (action === "run") {
             // Cron state can lag right after a successful run.
@@ -2006,6 +2424,8 @@ export function CronView() {
           if (["edit", "enable", "disable", "delete"].includes(action)) {
             requestRestart("Cron job configuration was updated.");
           }
+          setActionLoading(null);
+          return true;
         } else {
           flash(data.error || "Failed", "error");
         }
@@ -2024,6 +2444,7 @@ export function CronView() {
         flash(msg, "error");
       }
       setActionLoading(null);
+      return false;
     },
     [fetchJobs, fetchRuns, flash]
   );
@@ -2035,6 +2456,16 @@ export function CronView() {
       return next;
     });
     setRunOutputCollapsed((prev) => ({ ...prev, [jobId]: false }));
+  }, []);
+
+  // Clear run-result poll timer on unmount
+  useEffect(() => {
+    return () => {
+      if (runPollTimerRef.current) {
+        clearTimeout(runPollTimerRef.current);
+        runPollTimerRef.current = null;
+      }
+    };
   }, []);
 
   // Auto-scroll run output to bottom when output updates
@@ -2209,6 +2640,12 @@ export function CronView() {
                         missing target
                       </span>
                     )}
+                    {job.payload.model && (
+                      <span className="flex items-center gap-1 rounded-full bg-emerald-500/10 px-2 py-0.5 text-xs font-medium text-emerald-700 dark:text-emerald-300">
+                        <Cpu className="h-2.5 w-2.5" />
+                        {getFriendlyModelName(job.payload.model)}
+                      </span>
+                    )}
                   </div>
                   <p className="text-xs text-muted-foreground/85">
                     {scheduleDisplay(job.schedule)} &bull; {job.agentId}
@@ -2279,6 +2716,23 @@ export function CronView() {
                   >
                     <Pencil className="h-3.5 w-3.5" />
                   </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      if (window.confirm(`Delete cron job "${job.name}"? This cannot be undone.`)) {
+                        doAction("delete", job.id);
+                      }
+                    }}
+                    disabled={actionLoading === `delete-${job.id}`}
+                    className="rounded p-1.5 text-muted-foreground/80 transition-colors hover:bg-red-500/10 hover:text-red-600 dark:hover:text-red-400 disabled:opacity-50"
+                    title="Delete job"
+                  >
+                    {actionLoading === `delete-${job.id}` ? (
+                      <InlineSpinner className="h-3.5 w-3.5" />
+                    ) : (
+                      <Trash2 className="h-3.5 w-3.5" />
+                    )}
+                  </button>
                 </div>
               </div>
 
@@ -2299,14 +2753,19 @@ export function CronView() {
               {isEditing && (
                 <EditCronForm
                   job={job}
-                  onSave={(updates) => {
-                    doAction("edit", job.id, updates);
-                    setEditing(null);
+                  onSave={async (updates) => {
+                    const ok = await doAction("edit", job.id, updates);
+                    if (ok) setEditing(null);
+                    return ok;
                   }}
                   onCancel={() => setEditing(null)}
-                  onDelete={() => {
-                    doAction("delete", job.id);
-                    setEditing(null);
+                  onDelete={async () => {
+                    const ok = await doAction("delete", job.id);
+                    if (ok) setEditing(null);
+                    return ok;
+                  }}
+                  onMessageAutoSave={async (msg) => {
+                    await saveCronField(job.id, { message: msg });
                   }}
                 />
               )}
@@ -2439,8 +2898,8 @@ export function CronView() {
                         <div className="flex items-center gap-2">
                           <Cpu className="h-3 w-3 text-muted-foreground/70" />
                           <span className="text-muted-foreground/85">Model</span>
-                          <span className="ml-auto font-mono text-xs text-emerald-700 dark:text-emerald-300">
-                            {job.payload.model}
+                          <span className="ml-auto text-xs text-emerald-700 dark:text-emerald-300">
+                            {getFriendlyModelName(job.payload.model)}
                           </span>
                         </div>
                       )}
@@ -2481,26 +2940,37 @@ export function CronView() {
                         <div>
                           <span className="text-muted-foreground/85">Mode</span>
                           <p className="mt-0.5 font-medium text-foreground/90">
-                            {job.delivery.mode || "none"}
+                            {normalizeDeliveryMode(job.delivery.mode)}
                           </p>
                         </div>
                         <div>
                           <span className="text-muted-foreground/85">Channel</span>
                           <p className="mt-0.5 text-foreground/90">
-                            {job.delivery.channel || "—"}
+                            {job.delivery.mode === "webhook"
+                              ? "—"
+                              : getDeliveryChannelLabel(job.delivery.channel)}
                           </p>
                         </div>
                         <div>
-                          <span className="text-muted-foreground/85">To (recipient)</span>
+                          <span className="text-muted-foreground/85">
+                            {normalizeDeliveryMode(job.delivery.mode) === "webhook"
+                              ? "Webhook URL"
+                              : "To (recipient)"}
+                          </span>
                           <p
                             className={cn(
                               "mt-0.5 font-mono",
                               job.delivery.to
                                 ? "text-foreground/90"
-                                : "text-amber-700 dark:text-amber-300"
+                                : normalizeDeliveryMode(job.delivery.mode) === "announce"
+                                  ? "text-sky-700 dark:text-sky-300"
+                                  : "text-amber-700 dark:text-amber-300"
                             )}
                           >
-                            {job.delivery.to || "⚠ not set"}
+                            {job.delivery.to ||
+                              (normalizeDeliveryMode(job.delivery.mode) === "announce"
+                                ? "last route fallback"
+                                : "⚠ not set")}
                           </p>
                         </div>
                       </div>
