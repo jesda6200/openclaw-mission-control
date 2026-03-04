@@ -2270,20 +2270,30 @@ function ChannelBindingPicker({
               {selectedChannel.setupType === "cli" && (
                 <div className="space-y-2">
                   <div className="rounded-lg border border-foreground/10 bg-foreground/5 px-3 py-2">
-                    <p className="text-xs text-muted-foreground/60 mb-1">
-                      Run this command in the Terminal:
-                    </p>
-                    <code className="block rounded bg-black/30 px-2 py-1.5 text-xs font-mono text-emerald-400">
-                      {selectedChannel.setupCommand}
-                    </code>
+                    {selectedChannel.setupCommand ? (
+                      <>
+                        <p className="text-xs text-muted-foreground/60 mb-1">
+                          Run this command in the Terminal:
+                        </p>
+                        <code className="block rounded bg-black/30 px-2 py-1.5 text-xs font-mono text-emerald-400">
+                          {selectedChannel.setupCommand}
+                        </code>
+                      </>
+                    ) : (
+                      <p className="text-xs text-muted-foreground/70">
+                        {selectedChannel.setupHint || "Manual setup is required. Follow the official docs for this channel."}
+                      </p>
+                    )}
                   </div>
                   <div className="flex items-center gap-2">
-                    <Link
-                      href="/terminal"
-                      className="rounded-lg bg-primary text-primary-foreground px-3 py-2 text-xs font-medium transition-colors hover:bg-primary/90 inline-flex items-center gap-1.5"
-                    >
-                      Open Terminal
-                    </Link>
+                    {selectedChannel.setupCommand ? (
+                      <Link
+                        href="/terminal"
+                        className="rounded-lg bg-primary text-primary-foreground px-3 py-2 text-xs font-medium transition-colors hover:bg-primary/90 inline-flex items-center gap-1.5"
+                      >
+                        Open Terminal
+                      </Link>
+                    ) : null}
                     <a
                       href={selectedChannel.docsUrl}
                       target="_blank"
