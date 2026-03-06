@@ -983,14 +983,20 @@ export function ChatView({ isVisible = true }: { isVisible?: boolean }) {
             return next;
           });
         }
-        setModelsLoaded(true);
+        // Only mark models as "loaded" if we actually found models,
+        // or if warm-up is over. Prevents flash of "No model configured"
+        // while gateway is still starting up.
+        if (modelList.length > 0 || warmupExpired) {
+          setModelsLoaded(true);
+        }
         setAgentsLoading(false);
       })
       .catch(() => {
-        setModelsLoaded(true);
+        if (warmupExpired) setModelsLoaded(true);
         setAgentsLoading(false);
       });
-  }, [selectedAgent]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectedAgent, warmupExpired]);
 
   useEffect(() => {
     mountedAtRef.current = Date.now();
