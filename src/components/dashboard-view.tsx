@@ -970,7 +970,7 @@ export function DashboardView() {
           </div>
 
           {/* ── Access & pairing ─── */}
-          <div className="rounded-xl border border-stone-200 bg-white p-4 shadow-sm dark:border-[#2c343d] dark:bg-[#171a1d]">
+          {process.env.NEXT_PUBLIC_AGENTBAY_HOSTED !== "true" && <div className="rounded-xl border border-stone-200 bg-white p-4 shadow-sm dark:border-[#2c343d] dark:bg-[#171a1d]">
             <h2 className="mb-3 flex items-center gap-2 text-xs font-sans font-semibold uppercase tracking-wider text-muted-foreground">
               <KeyRound className="h-3.5 w-3.5" /> Access & pairing
             </h2>
@@ -1013,7 +1013,7 @@ export function DashboardView() {
                 )}
               </div>
             </div>
-          </div>
+          </div>}
 
           {/* ── Pairing Request Banner ──────────────────── */}
           {(pairingSummary?.total ?? 0) > 0 && (
