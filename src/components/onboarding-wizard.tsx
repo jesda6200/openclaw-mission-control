@@ -26,6 +26,19 @@ import { getFriendlyModelName } from "@/lib/model-metadata";
 
 type Model = { id: string; name: string };
 
+/** Latest recommended model per provider — shown with an "Advised" badge. */
+const ADVISED_MODELS: Record<string, string> = {
+  openai: "openai/gpt-5.4",
+  anthropic: "anthropic/claude-sonnet-4-6",
+  openrouter: "openrouter/anthropic/claude-sonnet-4-6",
+};
+
+function isAdvisedModel(provider: string, modelId: string): boolean {
+  const advised = ADVISED_MODELS[provider];
+  if (!advised) return false;
+  return modelId === advised || modelId.endsWith(advised.replace(/^[^/]+\//, ""));
+}
+
 type DmRequest = {
   channel: string;
   code: string;
@@ -184,9 +197,16 @@ export function OnboardingWizard({ onComplete }: Props) {
       const modelsData = await modelsRes.json();
       if (modelsData.ok && Array.isArray(modelsData.models)) {
         const list: Model[] = modelsData.models;
-        setModels(list);
-        const hint = PROVIDERS.find((p) => p.id === providerId)?.defaultModelHint ?? "";
-        const defaultModel = list.find((m) => m.id.includes(hint)) ?? list[0];
+        // Sort advised model to top
+        const sorted = [...list].sort((a, b) =>
+          isAdvisedModel(providerId, a.id) ? -1 : isAdvisedModel(providerId, b.id) ? 1 : 0
+        );
+        setModels(sorted);
+        // Auto-select advised model, fallback to hint match, then first
+        const defaultModel =
+          sorted.find((m) => isAdvisedModel(providerId, m.id)) ||
+          sorted.find((m) => m.id.includes(PROVIDERS.find((p) => p.id === providerId)?.defaultModelHint ?? "")) ||
+          sorted[0];
         if (defaultModel) setSelectedModel(defaultModel.id);
       }
     } catch {
@@ -311,16 +331,16 @@ export function OnboardingWizard({ onComplete }: Props) {
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ action: "approve-dm", channel, code }),
         });
-        const data = await res.json();
-        if (data.ok) {
+        const data = await res.json().catch(() => null);
+        if (data?.ok) {
           setApproved(true);
           if (pollRef.current) clearInterval(pollRef.current);
           setTimeout(() => onComplete(), 1500);
         } else {
-          setError(data.error || "Approve failed.");
+          setError(data?.error || `Approve failed (${res.status}).`);
         }
-      } catch {
-        setError("Network error.");
+      } catch (err) {
+        setError(`Network error: ${err instanceof Error ? err.message : String(err)}`);
       } finally {
         setApproving(null);
       }
@@ -542,7 +562,14 @@ export function OnboardingWizard({ onComplete }: Props) {
                         {(model) => (
                           <ComboboxItem key={model.id} value={model}>
                             <div className="flex flex-col gap-0.5">
-                              <span className="text-sm font-medium">{getFriendlyModelName(model.id)}</span>
+                              <div className="flex items-center gap-2">
+                                <span className="text-sm font-medium">{getFriendlyModelName(model.id)}</span>
+                                {isAdvisedModel(provider, model.id) && (
+                                  <span className="rounded-full bg-emerald-100 dark:bg-emerald-900/40 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-emerald-700 dark:text-emerald-400">
+                                    Advised
+                                  </span>
+                                )}
+                              </div>
                               {getFriendlyModelName(model.id) !== model.id && (
                                 <span className="font-mono text-[11px] text-muted-foreground">{model.id}</span>
                               )}
