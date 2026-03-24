@@ -1,0 +1,51 @@
+diff --git a/backend/wait-for-db.sh b/backend/wait-for-db.sh
+new file mode 100644
+index 0000000..2e3f4be
+--- /dev/null
++++ b/backend/wait-for-db.sh
+@@ -0,0 +1,17 @@
++#!/usr/bin/env bash
++# wait-for-db.sh: attend que Postgres soit prêt avant de démarrer l'app.
++set -e
++
++host=${DATABASE_HOST:-db}
++port=${DATABASE_PORT:-5432}
++user=${DATABASE_USER:-postgres}
++
++echo "Waiting for postgres at ${host}:${port}..."
++
++until pg_isready -h "$host" -p "$port" -U "$user" >/dev/null 2>&1; do
++  echo "Postgres is not ready - sleeping 1s"
++  sleep 1
++done
++
++echo "Postgres is up - continuing"
++exec "$@"
+diff --git a/infra/.placeholder b/infra/.placeholder
+new file mode 100644
+index 0000000..5ebec2e
+--- /dev/null
++++ b/infra/.placeholder
+@@ -0,0 +1 @@
++Placeholder infra marker
+diff --git a/infra/docker-compose.yml b/infra/docker-compose.yml
+index 059b7c9..d3a41f0 100644
+--- a/infra/docker-compose.yml
++++ b/infra/docker-compose.yml
+@@ -6,6 +6,7 @@ services:
+       POSTGRES_PASSWORD: postgres
+     volumes:
+       - db_data:/var/lib/postgresql/data
++      - ./infra/init:/docker-entrypoint-initdb.d:ro
+     ports:
+       - "5432:5432"
+     healthcheck:
+@@ -21,7 +22,7 @@ services:
+ 
+   backend:
+     build: ../backend
+-    command: npm run start:dev
++    command: sh -c "./wait-for-db.sh && npm run start:dev"
+     ports:
+       - "4000:4000"
+     environment:

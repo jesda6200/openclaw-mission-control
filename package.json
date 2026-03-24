@@ -1,0 +1,8 @@
+{
+  "name": "smoke-local-stub",
+  "version": "0.0.0",
+  "private": true,
+  "scripts": {
+    "smoke:local": "bash scripts/smoke_local.sh"
+  }
+}
