@@ -3,6 +3,7 @@
   "version": "0.0.0",
   "private": true,
   "scripts": {
-    "smoke:local": "bash scripts/smoke_local.sh"
+    "smoke:local": "bash scripts/smoke_local.sh",
+    "start:local": "node scripts/mock_server.js"
   }
 }
