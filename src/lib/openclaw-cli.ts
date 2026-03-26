@@ -11,8 +11,8 @@ const CLI_ENV = { ...process.env, NO_COLOR: "1", OPENCLAW_ALLOW_INSECURE_PRIVATE
 // Caps the number of simultaneously live CLI subprocesses. Callers that
 // exceed the limit are queued and resume in FIFO order as slots free up.
 
-const CLI_MAX_CONCURRENT = 4;
-const CLI_MAX_QUEUED = 12;
+const CLI_MAX_CONCURRENT = 6;
+const CLI_MAX_QUEUED = 20;
 let cliInFlight = 0;
 const cliQueue: Array<() => void> = [];
 
