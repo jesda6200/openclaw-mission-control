@@ -22,6 +22,11 @@ import {
   X,
   KeyRound,
   ArrowRight,
+  ChevronRight,
+  Wrench,
+  Users,
+  Check,
+  Loader2,
 } from "lucide-react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
@@ -236,13 +241,188 @@ const chatMarkdownComponents: React.ComponentProps<
   ),
 };
 
+/* ── Tool call / agent activity parsing & rendering ─────────────────────────── */
+
+type ToolCallSegment = {
+  type: "tool_start";
+  callId: string;
+  toolName: string;
+  displayName: string;
+  args?: string;
+  done: boolean;
+};
+
+type AgentSegment = {
+  type: "agent_start";
+  callId: string;
+  agentName: string;
+  done: boolean;
+};
+
+type TextSegment = { type: "text"; text: string };
+
+type MessageSegment = TextSegment | ToolCallSegment | AgentSegment;
+
+// Regex patterns for inline markers emitted by the backend SSE parser
+const TOOL_START_RE = /\u200B\[\[TOOL_START:([^:]*):([^:]*):([^\]]*)\]\]\u200B/g;
+const TOOL_ARGS_RE = /\u200B\[\[TOOL_ARGS:([^:]*):([^\]]*)\]\]\u200B/g;
+const TOOL_END_RE = /\u200B\[\[TOOL_END:([^\]]*)\]\]\u200B/g;
+const AGENT_START_RE = /\u200B\[\[AGENT_START:([^:]*):([^\]]*)\]\]\u200B/g;
+const ALL_MARKERS_RE = /\u200B\[\[(TOOL_START|TOOL_ARGS|TOOL_END|AGENT_START):[^\]]*\]\]\u200B/g;
+
+function parseMessageSegments(text: string): MessageSegment[] {
+  if (!text.includes("\u200B[[")) {
+    // Fast path: no markers at all
+    return text.trim() ? [{ type: "text", text }] : [];
+  }
+
+  const segments: MessageSegment[] = [];
+  const toolCalls = new Map<string, ToolCallSegment>();
+  const agentCalls = new Map<string, AgentSegment>();
+
+  // Collect all tool/agent metadata first
+  let m: RegExpExecArray | null;
+
+  TOOL_START_RE.lastIndex = 0;
+  while ((m = TOOL_START_RE.exec(text)) !== null) {
+    toolCalls.set(m[1], { type: "tool_start", callId: m[1], toolName: m[2], displayName: m[3], done: false });
+  }
+  TOOL_ARGS_RE.lastIndex = 0;
+  while ((m = TOOL_ARGS_RE.exec(text)) !== null) {
+    const tc = toolCalls.get(m[1]);
+    if (tc) tc.args = m[2];
+  }
+  TOOL_END_RE.lastIndex = 0;
+  while ((m = TOOL_END_RE.exec(text)) !== null) {
+    const tc = toolCalls.get(m[1]);
+    if (tc) tc.done = true;
+    const ac = agentCalls.get(m[1]);
+    if (ac) ac.done = true;
+  }
+  AGENT_START_RE.lastIndex = 0;
+  while ((m = AGENT_START_RE.exec(text)) !== null) {
+    agentCalls.set(m[1], { type: "agent_start", callId: m[1], agentName: m[2], done: false });
+  }
+
+  // Split text by all markers, interleaving text and tool/agent segments
+  const parts = text.split(ALL_MARKERS_RE);
+  let markerIdx = 0;
+  ALL_MARKERS_RE.lastIndex = 0;
+  const markers: RegExpExecArray[] = [];
+  while ((m = ALL_MARKERS_RE.exec(text)) !== null) markers.push(m);
+
+  for (let i = 0; i < parts.length; i++) {
+    const cleaned = parts[i].trim();
+    if (cleaned) segments.push({ type: "text", text: parts[i] });
+
+    if (markerIdx < markers.length) {
+      const marker = markers[markerIdx++];
+      const full = marker[0];
+      // Extract callId from the marker
+      const inner = full.replace(/\u200B/g, "").replace(/^\[\[/, "").replace(/\]\]$/, "");
+      const colonIdx = inner.indexOf(":");
+      const callId = colonIdx >= 0 ? inner.slice(colonIdx + 1).split(":")[0] : "";
+
+      if (full.includes("TOOL_START:")) {
+        const tc = toolCalls.get(callId);
+        if (tc) segments.push(tc);
+      } else if (full.includes("AGENT_START:")) {
+        const ac = agentCalls.get(callId);
+        if (ac) segments.push(ac);
+      }
+      // TOOL_ARGS and TOOL_END are metadata-only — already applied above
+    }
+  }
+
+  return segments;
+}
+
+function ToolCallBlock({ segment }: { segment: ToolCallSegment | AgentSegment }) {
+  const [open, setOpen] = useState(false);
+  const isAgent = segment.type === "agent_start";
+  const label = isAgent
+    ? `Calling ${(segment as AgentSegment).agentName}`
+    : (segment as ToolCallSegment).displayName;
+  const args = !isAgent ? (segment as ToolCallSegment).args : undefined;
+  const isDone = segment.done;
+
+  return (
+    <div className="my-2 rounded-lg border border-foreground/5 bg-card/50">
+      <button
+        type="button"
+        onClick={() => setOpen((o) => !o)}
+        className="flex w-full items-center gap-2 px-3 py-2 text-left text-xs transition-colors hover:bg-muted/30"
+      >
+        <ChevronRight
+          className={cn(
+            "h-3 w-3 shrink-0 text-muted-foreground/60 transition-transform",
+            open && "rotate-90"
+          )}
+        />
+        {isAgent ? (
+          <Users className="h-3 w-3 shrink-0 text-violet-400" />
+        ) : (
+          <Wrench className="h-3 w-3 shrink-0 text-amber-400" />
+        )}
+        <span className="flex-1 truncate font-medium text-foreground/70">
+          {label}
+        </span>
+        {isDone ? (
+          <Check className="h-3 w-3 shrink-0 text-emerald-400" />
+        ) : (
+          <Loader2 className="h-3 w-3 shrink-0 animate-spin text-muted-foreground/50" />
+        )}
+      </button>
+      {open && args && (
+        <div className="border-t border-foreground/5 px-3 py-2">
+          <pre className="max-h-32 overflow-auto whitespace-pre-wrap break-all text-[10px] leading-relaxed text-muted-foreground/60">
+            {tryFormatJson(args)}
+          </pre>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function tryFormatJson(s: string): string {
+  try {
+    return JSON.stringify(JSON.parse(s), null, 2);
+  } catch {
+    return s;
+  }
+}
+
 function MessageContent({ text }: { text: string }) {
   if (!text.trim()) return null;
+
+  const segments = parseMessageSegments(text);
+  if (segments.length === 0) return null;
+
+  // Optimization: if there's only plain text (no markers), render directly
+  if (segments.length === 1 && segments[0].type === "text") {
+    return (
+      <div className="space-y-1 [&>*:last-child]:mb-0">
+        <ReactMarkdown remarkPlugins={[remarkGfm]} components={chatMarkdownComponents}>
+          {segments[0].text}
+        </ReactMarkdown>
+      </div>
+    );
+  }
+
   return (
     <div className="space-y-1 [&>*:last-child]:mb-0">
-      <ReactMarkdown remarkPlugins={[remarkGfm]} components={chatMarkdownComponents}>
-        {text}
-      </ReactMarkdown>
+      {segments.map((seg, i) => {
+        if (seg.type === "text") {
+          const cleaned = seg.text.trim();
+          if (!cleaned) return null;
+          return (
+            <ReactMarkdown key={i} remarkPlugins={[remarkGfm]} components={chatMarkdownComponents}>
+              {cleaned}
+            </ReactMarkdown>
+          );
+        }
+        return <ToolCallBlock key={seg.callId} segment={seg} />;
+      })}
     </div>
   );
 }

@@ -367,7 +367,18 @@ export async function POST(request: NextRequest) {
         const patch: Record<string, unknown> = isCustom
           ? buildCustomProviderConfig(customBaseUrl, customApiKeyHeader, apiKeyValue)
           : buildProviderCredentialPatch(provider, apiKeyValue);
-        patch.agents = { defaults: { model: { primary: model } } };
+
+        // Only set the primary model if one isn't already configured —
+        // avoids silently overwriting a user's existing model choice.
+        let existingPrimaryModel = "";
+        try {
+          const existing = JSON.parse(await readFile(configPath, "utf-8"));
+          const m = existing?.agents?.defaults?.model;
+          existingPrimaryModel = (typeof m === "string" ? m : m?.primary) || "";
+        } catch { /* no config yet — will set model */ }
+        if (!existingPrimaryModel) {
+          patch.agents = { defaults: { model: { primary: model } } };
+        }
 
         if (telegramToken) {
           const channels = (patch.channels ?? {}) as Record<string, unknown>;
@@ -418,7 +429,13 @@ export async function POST(request: NextRequest) {
 
           const agents = (config.agents || {}) as Record<string, unknown>;
           const defaults = (agents.defaults || {}) as Record<string, unknown>;
-          defaults.model = { primary: model };
+          const existingModel = defaults.model as Record<string, unknown> | string | undefined;
+          const hasPrimary = typeof existingModel === "string"
+            ? existingModel
+            : existingModel?.primary;
+          if (!hasPrimary) {
+            defaults.model = { primary: model };
+          }
           agents.defaults = defaults;
           config.agents = agents;
 
