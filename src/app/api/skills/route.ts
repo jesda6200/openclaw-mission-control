@@ -1,7 +1,9 @@
 import { NextRequest, NextResponse } from "next/server";
 import { runCliJson } from "@/lib/openclaw";
 import { fetchConfig, patchConfig } from "@/lib/gateway-config";
-import { readFile } from "fs/promises";
+import { readFile, readdir } from "fs/promises";
+import { join } from "path";
+import { getDefaultWorkspaceSync, getSystemSkillsDir } from "@/lib/paths";
 
 export const dynamic = "force-dynamic";
 
@@ -77,6 +79,98 @@ type SkillDetail = {
   configChecks: unknown[];
   install: { id: string; kind: string; label: string; bins?: string[] }[];
 };
+
+/* ── Filesystem fallback for when CLI returns empty output ────── */
+
+/**
+ * Parse SKILL.md frontmatter to extract metadata.
+ * Handles both YAML-style and JSON-in-YAML metadata blocks.
+ */
+function parseSkillFrontmatter(raw: string): {
+  name?: string;
+  description?: string;
+  emoji?: string;
+  requires?: { bins?: string[]; anyBins?: string[]; env?: string[]; config?: string[]; os?: string[] };
+} {
+  const fmMatch = raw.match(/^---\n([\s\S]*?)\n---/);
+  if (!fmMatch) return {};
+  const fm = fmMatch[1];
+
+  const name = fm.match(/^name:\s*(.+)$/m)?.[1]?.trim().replace(/^["']|["']$/g, "");
+  const description = fm.match(/^description:\s*["']?([\s\S]*?)["']?\s*$/m)?.[1]?.trim().replace(/^["']|["']$/g, "");
+
+  // Extract emoji from metadata.openclaw.emoji
+  const emoji = fm.match(/"emoji":\s*"([^"]+)"/)?.[1];
+
+  // Extract requires from metadata.openclaw.requires
+  let requires: { bins?: string[]; anyBins?: string[]; env?: string[]; config?: string[]; os?: string[] } | undefined;
+  const reqMatch = fm.match(/"requires":\s*(\{[^}]*\})/);
+  if (reqMatch) {
+    try { requires = JSON.parse(reqMatch[1]); } catch { /* skip */ }
+  }
+
+  return { name, description, emoji, requires };
+}
+
+/**
+ * Read skills directly from the filesystem when the CLI is unavailable.
+ * Returns a degraded SkillsList with basic metadata parsed from SKILL.md files.
+ */
+async function readSkillsFromFilesystem(): Promise<SkillsList> {
+  const skills: Skill[] = [];
+  const seen = new Set<string>();
+
+  const scanDir = async (dir: string, source: string) => {
+    let entries: import("fs").Dirent[];
+    try {
+      entries = await readdir(dir, { withFileTypes: true, encoding: "utf8" }) as import("fs").Dirent[];
+    } catch { return; }
+
+    for (const entry of entries) {
+      if (!entry.isDirectory() || seen.has(entry.name)) continue;
+      seen.add(entry.name);
+
+      const skillPath = join(dir, entry.name, "SKILL.md");
+      let fm: ReturnType<typeof parseSkillFrontmatter> = {};
+      try {
+        const raw = await readFile(skillPath, "utf-8");
+        fm = parseSkillFrontmatter(raw);
+      } catch { /* SKILL.md may not exist */ }
+
+      const bins = fm.requires?.bins || [];
+      const anyBins = fm.requires?.anyBins || [];
+      const env = fm.requires?.env || [];
+      const config = fm.requires?.config || [];
+      const os = fm.requires?.os || [];
+
+      skills.push({
+        name: fm.name || entry.name,
+        description: fm.description || "",
+        emoji: fm.emoji || "",
+        eligible: false, // Can't determine without CLI
+        disabled: false,
+        blockedByAllowlist: false,
+        source,
+        bundled: source !== "workspace",
+        homepage: undefined,
+        missing: { bins, anyBins, env, config, os },
+      });
+    }
+  };
+
+  // Scan workspace skills first, then system skills
+  await scanDir(join(getDefaultWorkspaceSync(), "skills"), "workspace");
+  try {
+    const sysDir = await getSystemSkillsDir();
+    await scanDir(sysDir, "openclaw-bundled");
+  } catch { /* system skills dir may not exist */ }
+
+  return {
+    workspaceDir: getDefaultWorkspaceSync(),
+    managedSkillsDir: "",
+    skills,
+  };
+}
 
 /* ── GET ──────────────────────────────────────────── */
 
@@ -156,6 +250,41 @@ export async function GET(request: NextRequest) {
     return NextResponse.json(data);
   } catch (err) {
     console.error("Skills API error:", err);
+
+    // Filesystem fallback — read skills directly from disk when CLI fails.
+    // This handles the no-TTY empty stdout issue in OpenClaw v2026.3.23+.
+    if (action === "list" || action === "check") {
+      try {
+        const fsSkills = await readSkillsFromFilesystem();
+        if (fsSkills.skills.length > 0) {
+          if (action === "check") {
+            return NextResponse.json({
+              summary: {
+                total: fsSkills.skills.length,
+                eligible: 0,
+                disabled: 0,
+                blocked: 0,
+                missingRequirements: 0,
+              },
+              eligible: [],
+              disabled: [],
+              blocked: [],
+              missingRequirements: [],
+              warning: "Loaded from filesystem (CLI unavailable)",
+              fromFilesystem: true,
+            });
+          }
+          return NextResponse.json({
+            ...fsSkills,
+            warning: "Loaded from filesystem (CLI unavailable)",
+            fromFilesystem: true,
+          });
+        }
+      } catch (fsErr) {
+        console.error("Skills filesystem fallback error:", fsErr);
+      }
+    }
+
     if (action === "check") {
       return NextResponse.json({
         summary: {
