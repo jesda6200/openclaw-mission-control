@@ -178,6 +178,23 @@ type AgentsResponse = {
   configuredChannels?: ConfiguredChannel[];
 };
 
+type AgentGroup = {
+  id: string;
+  label: string;
+  agents: string[];
+};
+
+const MISSION_CONTROL_GROUPS: AgentGroup[] = [
+  { id: "intelligence", label: "INTELLIGENCE", agents: ["intent-analyzer", "strategy-engine", "task-graph-builder", "dispatcher", "execution-manager"] },
+  { id: "archi", label: "ARCHI", agents: ["backend-architect", "system-architect"] },
+  { id: "production", label: "PRODUCTION", agents: ["dev-engineer", "web-builder", "data-analyst"] },
+  { id: "ops", label: "OPS", agents: ["devops-engineer", "automation-engineer", "security-engineer"] },
+  { id: "control", label: "CONTROL", agents: ["qa-engineer", "validator", "feedback-loop"] },
+  { id: "expertise", label: "EXPERTISE", agents: ["research-agent", "product-manager", "crypto-analyst"] },
+];
+
+const MISSION_CONTROL_MAIN_AGENT_ID = "main";
+
 /* ================================================================
    Helpers
    ================================================================ */
@@ -235,9 +252,9 @@ const STATUS_COLORS: Record<string, { dot: string; text: string }> = {
 const AGENT_GRAPH_COLORS = {
   delegation: "var(--chart-2)",
   delegationLabel: "var(--chart-2)",
-  route: "var(--chart-4)",
-  routeLabel: "var(--chart-4)",
-  workspace: "var(--chart-3)",
+  route: "rgba(148,163,184,0.38)",
+  routeLabel: "rgba(148,163,184,0.82)",
+  workspace: "rgba(120,113,108,0.28)",
   muted: "var(--chart-muted)",
   mutedSoft: "var(--chart-tick-muted)",
 };
@@ -437,12 +454,22 @@ function WorkspaceNodeComponent({ data }: NodeProps) {
   );
 }
 
+function GroupNodeComponent({ data }: NodeProps<Node<{ label: string }>>) {
+  return (
+    <div className="min-w-[180px] rounded-2xl border border-cyan-400/25 bg-cyan-500/10 px-4 py-3 text-center shadow-[0_0_0_1px_rgba(34,211,238,0.08)] backdrop-blur-sm">
+      <div className="text-[10px] font-semibold tracking-[0.2em] text-cyan-200/80">PÔLE</div>
+      <div className="mt-1 text-sm font-bold text-cyan-50">{String(data.label || "GROUP")}</div>
+    </div>
+  );
+}
+
 const nodeTypes = {
   gateway: GatewayNode,
   agent: AgentNodeComponent,
   runtimeSubagent: RuntimeSubagentNodeComponent,
   channel: ChannelNodeComponent,
   workspace: WorkspaceNodeComponent,
+  group: GroupNodeComponent,
 };
 
 /* ================================================================
@@ -461,13 +488,9 @@ function buildGraph(
   const edges: Edge[] = [];
   const agents = data.agents;
 
-  // Gather unique channels/workspaces and explicit binding routes.
-  const channelMap = new Map<string, Set<string>>(); // channel → account ids
-  const workspaceMap = new Map<string, string[]>(); // workspace → agent names
-  const channelRoutes = new Map<
-    string,
-    Array<{ agentId: string; accountId: string | null; raw: string }>
-  >(); // channel -> explicit routes
+  const channelMap = new Map<string, Set<string>>();
+  const workspaceMap = new Map<string, string[]>();
+  const channelRoutes = new Map<string, Array<{ agentId: string; accountId: string | null; raw: string }>>();
 
   for (const ch of data.configuredChannels || []) {
     if (ch.enabled && ch.channel) channelMap.set(ch.channel, new Set());
@@ -482,31 +505,36 @@ function buildGraph(
       if (!channelMap.has(ch)) channelMap.set(ch, new Set());
       if (accId) channelMap.get(ch)!.add(accId);
       if (!channelRoutes.has(ch)) channelRoutes.set(ch, []);
-      channelRoutes.get(ch)!.push({
-        agentId: a.id,
-        accountId: accId,
-        raw: b,
-      });
+      channelRoutes.get(ch)!.push({ agentId: a.id, accountId: accId, raw: b });
     }
     if (!workspaceMap.has(a.workspace)) workspaceMap.set(a.workspace, []);
     workspaceMap.get(a.workspace)!.push(a.name);
   }
 
-  // ── Classify agents ──
-  const subagentIds = new Set(agents.flatMap((a) => a.subagents));
-  const topLevelAgents = agents.filter((a) => !subagentIds.has(a.id));
-  const subAgents = agents.filter((a) => subagentIds.has(a.id));
   const defaultAgent =
+    agents.find((a) => a.id === MISSION_CONTROL_MAIN_AGENT_ID) ||
     agents.find((a) => a.isDefault) ||
-    agents.find((a) => a.id === "main") ||
     agents[0] ||
     null;
 
-  // ── Dagre-based automatic layout ──
-  // Uses dagre graph layout to prevent overlaps at any scale.
-  // Layers left→right: Channels → Gateway → Agents (+subs) → Workspaces
-  const RUNTIME_SUBAGENT_OFFSET_X = 290;
-  const RUNTIME_SUBAGENT_SPACING_Y = 94;
+  const fallbackPositions = new Map<string, { x: number; y: number }>();
+  function getPosition(nodeId: string, fallbackX: number, fallbackY: number) {
+    if (savedPositions && savedPositions[nodeId]) return savedPositions[nodeId];
+    return fallbackPositions.get(nodeId) || { x: fallbackX, y: fallbackY };
+  }
+
+  const GATEWAY_X = -20;
+  const GATEWAY_Y = -10;
+  const CHANNEL_COLUMN_X = -520;
+  const GROUP_START_X = 240;
+  const GROUP_SPACING_X = 340;
+  const GROUP_Y = -10;
+  const AGENT_Y_BASE = 150;
+  const AGENT_Y_STEP = 110;
+  const WORKSPACE_ROW_Y = 700;
+  const WORKSPACE_SPACING_X = 280;
+  const RUNTIME_SUBAGENT_OFFSET_Y = -120;
+  const RUNTIME_SUBAGENT_SPACING_X = 220;
 
   const gatewayEdgeStyle = { stroke: "var(--border)", strokeWidth: 1.5 };
   const gatewayEdgeMarker = {
@@ -516,196 +544,130 @@ function buildGraph(
     height: 14,
   } as const;
 
-  // Node dimension hints for dagre (approximate card sizes)
-  const AGENT_NODE_W = 240;
-  const AGENT_NODE_H = 110;
-  const GATEWAY_NODE_W = 160;
-  const GATEWAY_NODE_H = 80;
-  const CHANNEL_NODE_W = 140;
-  const CHANNEL_NODE_H = 60;
-  const WORKSPACE_NODE_W = 180;
-  const WORKSPACE_NODE_H = 70;
-  const RUNTIME_NODE_W = 200;
-  const RUNTIME_NODE_H = 70;
-
-  // Build dagre graph for all core nodes (gateway, agents, channels, workspaces, runtime)
-  const Graph = dagre.graphlib?.Graph;
-  const layoutFn = dagre.layout;
-  const useDagre = Boolean(Graph && layoutFn);
-  const dagreGraph = useDagre ? new Graph!() : null;
-
-  if (dagreGraph) {
-    dagreGraph.setGraph({
-      rankdir: "LR",
-      nodesep: 50,
-      ranksep: 120,
-      marginx: 30,
-      marginy: 30,
-    });
-    dagreGraph.setDefaultEdgeLabel(() => ({}));
-  }
-
-  // ── Register all nodes with dagre ──
-
-  // Gateway
   const gatewayId = "gateway";
-  if (dagreGraph) dagreGraph.setNode(gatewayId, { width: GATEWAY_NODE_W, height: GATEWAY_NODE_H });
-
-  // All agents (top-level and sub)
-  for (const agent of agents) {
-    const nodeId = `agent-${agent.id}`;
-    if (dagreGraph) dagreGraph.setNode(nodeId, { width: AGENT_NODE_W, height: AGENT_NODE_H });
-  }
-
-  // Channels
-  const channels = Array.from(channelMap.entries()).map(([channel, accountIds]) => [
-    channel,
-    Array.from(accountIds),
-  ] as const);
-  for (const [ch] of channels) {
-    if (dagreGraph) dagreGraph.setNode(`ch-${ch}`, { width: CHANNEL_NODE_W, height: CHANNEL_NODE_H });
-  }
-
-  // Workspaces
-  const workspaces = Array.from(workspaceMap.entries());
-  workspaces.forEach((_ws, i) => {
-    if (dagreGraph) dagreGraph.setNode(`ws-${i}`, { width: WORKSPACE_NODE_W, height: WORKSPACE_NODE_H });
-  });
-
-  // Runtime subagents
-  const runtimeNodeIds: string[] = [];
-  for (const parent of agents) {
-    const runtimeSubs = (parent.runtimeSubagents || [])
-      .filter((s) => s.status === "running")
-      .slice(0, 6);
-    for (const sub of runtimeSubs) {
-      const runtimeNodeId = `runtime-subagent-${sub.sessionKey.replace(/[^a-zA-Z0-9_-]/g, "-")}`;
-      runtimeNodeIds.push(runtimeNodeId);
-      if (dagreGraph) dagreGraph.setNode(runtimeNodeId, { width: RUNTIME_NODE_W, height: RUNTIME_NODE_H });
-    }
-  }
-
-  // ── Register all edges with dagre ──
-
-  // Channel → Gateway (so channels rank left of gateway)
-  for (const [ch] of channels) {
-    if (dagreGraph) dagreGraph.setEdge(`ch-${ch}`, gatewayId);
-  }
-
-  // Gateway → top-level agents
-  for (const agent of topLevelAgents) {
-    if (dagreGraph) dagreGraph.setEdge(gatewayId, `agent-${agent.id}`);
-  }
-
-  // Gateway → sub-agents (so they're at the same rank as their peers)
-  for (const sub of subAgents) {
-    if (dagreGraph) dagreGraph.setEdge(gatewayId, `agent-${sub.id}`);
-  }
-
-  // Parent → sub-agent (register all delegation pairs for dagre)
-  for (const parent of agents) {
-    for (const childId of parent.subagents) {
-      if (agents.some((a) => a.id === childId) && dagreGraph) {
-        dagreGraph.setEdge(`agent-${parent.id}`, `agent-${childId}`);
-      }
-    }
-  }
-
-  // Agent → workspace
-  workspaces.forEach(([ws], i) => {
-    for (const a of agents) {
-      if (a.workspace === ws && dagreGraph) {
-        dagreGraph.setEdge(`agent-${a.id}`, `ws-${i}`);
-      }
-    }
-  });
-
-  // Parent agent → runtime subagent
-  for (const parent of agents) {
-    const runtimeSubs = (parent.runtimeSubagents || [])
-      .filter((s) => s.status === "running")
-      .slice(0, 6);
-    for (const sub of runtimeSubs) {
-      const runtimeNodeId = `runtime-subagent-${sub.sessionKey.replace(/[^a-zA-Z0-9_-]/g, "-")}`;
-      if (dagreGraph) dagreGraph.setEdge(`agent-${parent.id}`, runtimeNodeId);
-    }
-  }
-
-  // ── Run dagre layout ──
-  const dagrePositions = new Map<string, { x: number; y: number }>();
-  if (dagreGraph && layoutFn) {
-    try {
-      layoutFn(dagreGraph);
-      for (const nodeId of dagreGraph.nodes()) {
-        const node = dagreGraph.node(nodeId);
-        if (node && typeof node.x === "number" && typeof node.y === "number") {
-          dagrePositions.set(nodeId, {
-            x: node.x - (node.width ?? 200) / 2,
-            y: node.y - (node.height ?? 100) / 2,
-          });
-        }
-      }
-    } catch {
-      // Fall through to manual fallback positions
-    }
-  }
-
-  // Fallback position helper (if dagre unavailable or fails)
-  const FALLBACK_GATEWAY_X = 0;
-  const FALLBACK_GATEWAY_Y = 0;
-  const FALLBACK_AGENT_X = 320;
-  const FALLBACK_AGENT_SPACING_Y = 160;
-
-  function getPosition(nodeId: string, fallbackX: number, fallbackY: number) {
-    // User-saved positions take priority over dagre layout
-    if (savedPositions && savedPositions[nodeId]) return savedPositions[nodeId];
-    return dagrePositions.get(nodeId) || { x: fallbackX, y: fallbackY };
-  }
-
-  // ── 1. Gateway node ──
   nodes.push({
     id: gatewayId,
     type: "gateway",
-    position: getPosition(gatewayId, FALLBACK_GATEWAY_X, FALLBACK_GATEWAY_Y),
+    position: getPosition(gatewayId, GATEWAY_X, GATEWAY_Y),
     data: { agentCount: agents.length, owner: data.owner || "" },
     draggable: true,
   });
 
-  // ── 2. All agents (top-level and sub-agents) ──
-  for (const agent of agents) {
-    const nodeId = `agent-${agent.id}`;
-    const idx = agents.indexOf(agent);
-    const isSub = subagentIds.has(agent.id);
-    const fallbackIdx = isSub ? subAgents.indexOf(agent) : topLevelAgents.indexOf(agent);
-    const fallbackY = FALLBACK_GATEWAY_Y + fallbackIdx * FALLBACK_AGENT_SPACING_Y;
+  const agentsById = new Map(agents.map((agent) => [agent.id, agent]));
+  const assigned = new Set<string>();
+  const groups = MISSION_CONTROL_GROUPS.map((group) => ({
+    ...group,
+    resolved: group.agents.map((id) => agentsById.get(id)).filter(Boolean) as Agent[],
+  })).filter((group) => group.resolved.length > 0);
 
+  groups.forEach((group) => group.resolved.forEach((agent) => assigned.add(agent.id)));
+
+  const ungrouped = agents.filter(
+    (agent) => agent.id !== MISSION_CONTROL_MAIN_AGENT_ID && !assigned.has(agent.id)
+  );
+  if (ungrouped.length > 0) {
+    groups.push({
+      id: "other",
+      label: "AUTRES",
+      agents: ungrouped.map((agent) => agent.id),
+      resolved: ungrouped,
+    } as AgentGroup & { resolved: Agent[] });
+  }
+
+  const mainAgent = agentsById.get(MISSION_CONTROL_MAIN_AGENT_ID) || defaultAgent;
+  if (mainAgent) {
+    const nodeId = `agent-${mainAgent.id}`;
+    fallbackPositions.set(nodeId, { x: GATEWAY_X + 240, y: 20 });
     nodes.push({
       id: nodeId,
       type: "agent",
-      position: getPosition(nodeId, FALLBACK_AGENT_X + (isSub ? 60 : 0), fallbackY),
+      position: getPosition(nodeId, GATEWAY_X + 240, 20),
       data: {
-        agent,
-        idx,
-        selected: selectedId === agent.id,
-        onClick: () => onSelectAgent(agent.id),
+        agent: mainAgent,
+        idx: agents.indexOf(mainAgent),
+        selected: selectedId === mainAgent.id,
+        onClick: () => onSelectAgent(mainAgent.id),
       },
       draggable: true,
     });
 
-    // Gateway → Agent
     edges.push({
-      id: `gw-${agent.id}`,
+      id: `gw-${mainAgent.id}`,
       source: gatewayId,
       target: nodeId,
       type: "default",
-      style: gatewayEdgeStyle,
+      style: { ...gatewayEdgeStyle, strokeWidth: 1.8 },
       markerEnd: gatewayEdgeMarker,
     });
   }
 
-  // ── 3. Sub-agent delegation edges ──
-  // Build one edge per (parent → child) delegation relationship.
-  // An agent can be delegated-to by multiple parents, and can itself delegate to others.
+  groups.forEach((group, groupIndex) => {
+    const groupNodeId = `group-${group.id}`;
+    const groupX = GROUP_START_X + groupIndex * GROUP_SPACING_X;
+    fallbackPositions.set(groupNodeId, { x: groupX, y: GROUP_Y });
+    nodes.push({
+      id: groupNodeId,
+      type: "group",
+      position: getPosition(groupNodeId, groupX, GROUP_Y),
+      data: { label: group.label },
+      draggable: true,
+    });
+
+    if (mainAgent) {
+      edges.push({
+        id: `main-group-${group.id}`,
+        source: `agent-${mainAgent.id}`,
+        target: groupNodeId,
+        type: "default",
+        animated: true,
+        style: { stroke: AGENT_GRAPH_COLORS.delegation, strokeWidth: 1.7, strokeDasharray: "6 4" },
+        label: "orchestre",
+        labelStyle: { fill: AGENT_GRAPH_COLORS.delegationLabel, fontSize: 10 },
+        labelBgStyle: { fill: "var(--card)", fillOpacity: 0.9 },
+        markerEnd: {
+          type: MarkerType.ArrowClosed,
+          color: AGENT_GRAPH_COLORS.delegation,
+          width: 14,
+          height: 10,
+        },
+      });
+    }
+
+    group.resolved.forEach((agent, agentIndex) => {
+      const nodeId = `agent-${agent.id}`;
+      const fallbackX = groupX;
+      const fallbackY = AGENT_Y_BASE + agentIndex * AGENT_Y_STEP;
+      fallbackPositions.set(nodeId, { x: fallbackX, y: fallbackY });
+
+      nodes.push({
+        id: nodeId,
+        type: "agent",
+        position: getPosition(nodeId, fallbackX, fallbackY),
+        data: {
+          agent,
+          idx: agents.indexOf(agent),
+          selected: selectedId === agent.id,
+          onClick: () => onSelectAgent(agent.id),
+        },
+        draggable: true,
+      });
+
+      edges.push({
+        id: `group-agent-${group.id}-${agent.id}`,
+        source: groupNodeId,
+        target: nodeId,
+        type: "default",
+        style: { stroke: "rgba(34,211,238,0.45)", strokeWidth: 1.4 },
+        markerEnd: {
+          type: MarkerType.ArrowClosed,
+          color: "rgba(34,211,238,0.7)",
+          width: 13,
+          height: 9,
+        },
+      });
+    });
+  });
+
   for (const parent of agents) {
     for (const childId of parent.subagents) {
       const child = agents.find((a) => a.id === childId);
@@ -732,18 +694,16 @@ function buildGraph(
     }
   }
 
-  // ── 3b. Runtime spawned subagents ──
   for (const parent of agents) {
-    const runtimeSubs = (parent.runtimeSubagents || [])
-      .filter((s) => s.status === "running")
-      .slice(0, 6);
+    const runtimeSubs = (parent.runtimeSubagents || []).filter((s) => s.status === "running").slice(0, 6);
     if (runtimeSubs.length === 0) continue;
 
     runtimeSubs.forEach((sub, idx) => {
       const runtimeNodeId = `runtime-subagent-${sub.sessionKey.replace(/[^a-zA-Z0-9_-]/g, "-")}`;
       const parentNode = nodes.find((n) => n.id === `agent-${parent.id}`);
-      const fallbackX = (parentNode?.position.x ?? FALLBACK_AGENT_X) + RUNTIME_SUBAGENT_OFFSET_X;
-      const fallbackY = (parentNode?.position.y ?? 0) + (idx + 1) * RUNTIME_SUBAGENT_SPACING_Y;
+      const fallbackX = (parentNode?.position.x ?? GATEWAY_X) + idx * RUNTIME_SUBAGENT_SPACING_X;
+      const fallbackY = (parentNode?.position.y ?? AGENT_Y_BASE) + RUNTIME_SUBAGENT_OFFSET_Y;
+      fallbackPositions.set(runtimeNodeId, { x: fallbackX, y: fallbackY });
 
       nodes.push({
         id: runtimeNodeId,
@@ -788,29 +748,28 @@ function buildGraph(
     });
   }
 
-  // ── 4. Channel nodes (positioned by dagre) ──
-  const FALLBACK_CHANNEL_X = -350;
-  const chFallbackSpacing = 180;
-
+  const channels = Array.from(channelMap.entries())
+    .map(([channel, accountIds]) => [channel, Array.from(accountIds)] as const)
+    .filter(([ch]) => channelRoutes.has(ch));
+  const chFallbackSpacing = 140;
   channels.forEach(([ch, accountIds], i) => {
     const nodeId = `ch-${ch}`;
-    const fallbackY = -((channels.length - 1) * chFallbackSpacing) / 2 + i * chFallbackSpacing;
+    const fallbackY = GATEWAY_Y - ((channels.length - 1) * chFallbackSpacing) / 2 + i * chFallbackSpacing;
+    fallbackPositions.set(nodeId, { x: CHANNEL_COLUMN_X, y: fallbackY });
     nodes.push({
       id: nodeId,
       type: "channel",
-      position: getPosition(nodeId, FALLBACK_CHANNEL_X, fallbackY),
+      position: getPosition(nodeId, CHANNEL_COLUMN_X, fallbackY),
       data: { channel: ch, accountIds },
       draggable: true,
     });
 
-    // Channel → Agent routes (one edge per explicit binding route).
     const explicitRoutes = channelRoutes.get(ch) || [];
-    const routes =
-      explicitRoutes.length > 0
-        ? explicitRoutes
-        : defaultAgent
-          ? [{ agentId: defaultAgent.id, accountId: null, raw: "implicit-default" }]
-          : [];
+    const routes = explicitRoutes.length > 0
+      ? explicitRoutes
+      : defaultAgent
+        ? [{ agentId: defaultAgent.id, accountId: null, raw: "implicit-default" }]
+        : [];
 
     routes.forEach((route, routeIdx) => {
       const implicitDefault = route.raw === "implicit-default";
@@ -819,35 +778,32 @@ function buildGraph(
         source: nodeId,
         target: `agent-${route.agentId}`,
         type: "default",
-        style: { stroke: AGENT_GRAPH_COLORS.route, strokeWidth: implicitDefault ? 1.25 : 1.5 },
-        label: implicitDefault
-          ? "default route"
-          : route.accountId
-            ? route.accountId
-            : "all accounts",
-        labelStyle: { fill: AGENT_GRAPH_COLORS.routeLabel, fontSize: 10, fontWeight: 500 },
-        labelBgStyle: { fill: "var(--card)", fillOpacity: 0.85 },
+        style: { stroke: AGENT_GRAPH_COLORS.route, strokeWidth: implicitDefault ? 0.9 : 1.05, strokeDasharray: "3 5" },
+        label: route.accountId ? route.accountId : undefined,
+        labelStyle: { fill: AGENT_GRAPH_COLORS.routeLabel, fontSize: 9, fontWeight: 500 },
+        labelBgStyle: { fill: "var(--card)", fillOpacity: 0.45 },
         markerEnd: {
           type: MarkerType.ArrowClosed,
           color: AGENT_GRAPH_COLORS.route,
-          width: 14,
-          height: 10,
+          width: 11,
+          height: 8,
         },
       });
     });
   });
 
-  // ── 5. Workspace nodes (positioned by dagre) ──
-  const FALLBACK_WORKSPACE_X = 650;
-  const wsFallbackSpacing = 180;
-
+  const workspaces = Array.from(workspaceMap.entries()).filter(([, agentNames]) => agentNames.length > 1);
+  const totalWorkspaceWidth = Math.max(0, (workspaces.length - 1) * WORKSPACE_SPACING_X);
+  const workspaceStartX = GATEWAY_X + 420 - totalWorkspaceWidth / 2;
   workspaces.forEach(([ws, agentNames], i) => {
     const nodeId = `ws-${i}`;
-    const fallbackY = -((workspaces.length - 1) * wsFallbackSpacing) / 2 + i * wsFallbackSpacing;
+    const fallbackX = workspaceStartX + i * WORKSPACE_SPACING_X;
+    const fallbackY = WORKSPACE_ROW_Y;
+    fallbackPositions.set(nodeId, { x: fallbackX, y: fallbackY });
     nodes.push({
       id: nodeId,
       type: "workspace",
-      position: getPosition(nodeId, FALLBACK_WORKSPACE_X, fallbackY),
+      position: getPosition(nodeId, fallbackX, fallbackY),
       data: {
         path: ws,
         agentNames,
@@ -857,19 +813,18 @@ function buildGraph(
       draggable: true,
     });
 
-    // Agent → Workspace
     for (const a of agents) {
       if (a.workspace === ws) {
         edges.push({
           id: `ws-${a.id}-${i}`,
           source: `agent-${a.id}`,
           target: nodeId,
-          style: { stroke: AGENT_GRAPH_COLORS.workspace, strokeWidth: 1.5 },
+          style: { stroke: AGENT_GRAPH_COLORS.workspace, strokeWidth: 0.95, strokeDasharray: "2 6" },
           markerEnd: {
             type: MarkerType.ArrowClosed,
             color: AGENT_GRAPH_COLORS.workspace,
-            width: 14,
-            height: 10,
+            width: 10,
+            height: 7,
           },
         });
       }
@@ -1556,13 +1511,13 @@ function FlowViewInner({
       onEdgesChange={onEdgesChange}
       onNodeDragStop={onNodeDragStop}
       onInit={() => {
-        setTimeout(() => fitView({ padding: 0.15 }), 0);
-        setTimeout(() => fitView({ padding: 0.15, duration: 200 }), 300);
+        setTimeout(() => fitView({ padding: 0.28, maxZoom: 0.9 }), 0);
+        setTimeout(() => fitView({ padding: 0.28, maxZoom: 0.9, duration: 200 }), 300);
       }}
       onNodeMouseEnter={undefined}
       nodeTypes={nodeTypes}
       fitView
-      fitViewOptions={{ padding: 0.15 }}
+      fitViewOptions={{ padding: 0.28, maxZoom: 0.9 }}
       proOptions={{ hideAttribution: true }}
       minZoom={0.1}
       maxZoom={2}
@@ -1573,18 +1528,16 @@ function FlowViewInner({
         showInteractive={false}
         className="!bg-card dark:!bg-zinc-900 !border-border !shadow-xl [&>button]:!bg-secondary dark:[&>button]:!bg-zinc-800 [&>button]:!border-border [&>button]:!text-muted-foreground [&>button:hover]:!bg-accent dark:[&>button:hover]:!bg-zinc-700"
       />
-      {Object.keys(savedPos).length > 0 && (
-        <div className="absolute top-3 right-3 z-10">
-          <button
-            onClick={handleResetLayout}
-            className="flex items-center gap-1.5 rounded-md border border-border bg-card px-2.5 py-1.5 text-xs text-muted-foreground shadow-sm hover:bg-accent hover:text-foreground transition-colors dark:bg-zinc-900 dark:hover:bg-zinc-800"
-            title="Reset to automatic layout"
-          >
-            <RotateCcw className="h-3 w-3" />
-            Reset layout
-          </button>
-        </div>
-      )}
+      <div className="absolute top-3 right-3 z-10">
+        <button
+          onClick={handleResetLayout}
+          className="flex items-center gap-1.5 rounded-md border border-border bg-card px-2.5 py-1.5 text-xs text-muted-foreground shadow-sm hover:bg-accent hover:text-foreground transition-colors dark:bg-zinc-900 dark:hover:bg-zinc-800"
+          title="Reset to automatic layout"
+        >
+          <RotateCcw className="h-3 w-3" />
+          Reset layout
+        </button>
+      </div>
     </ReactFlow>
   );
 }
