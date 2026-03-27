@@ -50,3 +50,6 @@ next-env.d.ts
 *.png
 /e2e/
 .playwright-cli/
+
+# local runtime logs
+mission-control.log
