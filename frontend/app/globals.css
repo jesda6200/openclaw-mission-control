@@ -1,0 +1,31 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  color-scheme: dark;
+}
+
+html, body {
+  min-height: 100%;
+  background:
+    radial-gradient(circle at top, rgba(124, 58, 237, 0.16), transparent 30%),
+    radial-gradient(circle at 20% 20%, rgba(34, 211, 238, 0.1), transparent 20%),
+    #030712;
+}
+
+body {
+  @apply text-slate-100 antialiased;
+}
+
+* {
+  @apply border-stroke;
+}
+
+.card {
+  @apply rounded-3xl border border-white/10 bg-white/5 backdrop-blur-xl;
+}
+
+.text-balance {
+  text-wrap: balance;
+}

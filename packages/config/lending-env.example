@@ -1,0 +1,22 @@
+# API
+NODE_ENV=development
+PORT=3000
+API_PREFIX=/api/v1
+JWT_ACCESS_SECRET=change-me-access
+JWT_REFRESH_SECRET=change-me-refresh
+JWT_ACCESS_EXPIRES_IN=15m
+JWT_REFRESH_EXPIRES_IN=7d
+CORS_ORIGIN=http://localhost:5173
+
+# DB
+DATABASE_URL=postgresql://postgres:postgres@db:5432/lending_app
+DB_SCHEMA=lending
+
+# Wallet/Auth
+WALLET_CHALLENGE_TTL_SECONDS=300
+AUTH_RATE_LIMIT_MAX=20
+
+# Mock market engine
+PRICE_SOURCE=mock
+RATE_ENGINE_MODE=mock
+DEFAULT_CHAIN_ID=1

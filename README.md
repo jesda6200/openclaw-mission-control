@@ -1,43 +1,66 @@
-# Crypto Monitoring SaaS — Monorepo (squelette)
+# NebulaLend Monorepo
 
-Ce dépôt contient la structure minimale pour un SaaS de monitoring crypto en temps réel.
+Monorepo clean architecture pour une plateforme moderne de lending crypto type Aave simplifié.
 
-Structure:
-- /backend — API (Node.js)
-- /frontend — React + Vite frontend
-- /infra — Docker Compose + init scripts (TimescaleDB, Redis)
-- /scripts — migrations, seed et ingestion demo
+## Apps & packages
 
-Quickstart (dev/demo)
+- `frontend/` — Next.js 14 + Tailwind premium UI
+- `backend/` — API Node.js JWT auth prête prod
+- `packages/contracts/` — types et contrats partagés frontend/backend
+- `infra/` — orchestration Docker
 
-Prerequis:
-- Docker & docker-compose (v1.29+ or docker compose plugin)
-- Node.js 18+ and npm
+## Quick start
 
-1) Copier .env.example → .env et ajuster si nécessaire
-   cp infra/env.example .env
+### Local
 
-2) Lancer les services de base (DB + Redis + backend + frontend) en mode développement
-   cd infra
-   docker-compose up --build
+```bash
+npm install
+npm run dev:backend
+npm run dev:frontend
+```
 
-3) Initialiser la base (exécuter les scripts SQL d'init)
-   # dans un terminal local (ou via le container db):
-   docker exec -it $(docker-compose ps -q db) psql -U postgres -f /docker-entrypoint-initdb.d/01_create_schema.sql
+- Frontend: `http://localhost:3000`
+- Backend: `http://localhost:3000/api/v1/health` par défaut si lancé seul, ou via Docker selon variables/ports choisies
 
-4) Seed des symboles de demo
-   # localement (si vous avez psql) ou depuis le container backend:
-   node scripts/seed_symbols.js
+### Docker
 
-5) Démarrer les front & backend en local (optionnel, si vous préférez ne pas utiliser les containers pour dev)
-   cd frontend && npm ci && npm run dev
-   cd ../backend && npm ci && npm run start:dev
+```bash
+cd infra
+docker compose up --build
+```
 
-Endpoints utiles (dev):
-- Backend: http://localhost:4000/health
-- Frontend: http://localhost:5173/
+- Frontend: `http://localhost:3000`
+- Backend: `http://localhost:4000`
 
-Voir les READMEs spécifiques sous /backend, /frontend et /infra pour plus de détails.
+## Frontend stack
 
---
-Generated: Deliverables and dev run instructions updated.
+- Next.js App Router
+- Tailwind CSS
+- TypeScript
+- MetaMask connect UI
+- REST API integration layer
+
+## Backend integration used now
+
+Le frontend consomme déjà:
+
+- `GET /api/v1/health`
+- `POST /api/v1/auth/register`
+- `POST /api/v1/auth/login`
+- `GET /api/v1/auth/me`
+
+## Suggested next backend endpoints
+
+Pour remplacer les mocks de lending:
+
+- `GET /api/v1/markets`
+- `GET /api/v1/portfolio/summary`
+- `GET /api/v1/portfolio/activity`
+- `POST /api/v1/positions/deposit`
+- `POST /api/v1/positions/borrow`
+
+## Production notes
+
+- Le frontend build en mode standalone pour Docker.
+- Le backend doit autoriser `CORS_ORIGIN=http://localhost:3000`.
+- Les tokens JWT sont reçus côté UI; stockage sécurisé (cookie httpOnly ou BFF) recommandé pour un vrai déploiement prod.

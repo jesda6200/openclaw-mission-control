@@ -1,9 +1,20 @@
 {
-  "name": "smoke-local-stub",
-  "version": "0.0.0",
+  "name": "lending-platform-monorepo",
+  "version": "1.0.0",
   "private": true,
+  "workspaces": [
+    "frontend",
+    "backend",
+    "packages/*"
+  ],
   "scripts": {
-    "smoke:local": "bash scripts/smoke_local.sh",
-    "start:local": "node scripts/mock_server.js"
+    "dev:frontend": "npm run dev --workspace @lending/frontend",
+    "build:frontend": "npm run build --workspace @lending/frontend",
+    "start:frontend": "npm run start --workspace @lending/frontend",
+    "dev:backend": "npm run dev --workspace backend-v2-auth-api",
+    "start:backend": "npm run start --workspace backend-v2-auth-api",
+    "qa:architecture": "node scripts/qa/architecture-readiness.mjs",
+    "qa:auth-smoke": "node scripts/qa/api-auth-smoke.mjs",
+    "qa:backend": "cd backend && npm test"
   }
 }

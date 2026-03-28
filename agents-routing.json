@@ -1,0 +1,96 @@
+{
+  "agents": {
+    "orchestration": {
+      "main": "main",
+      "intent": "intent-analyzer",
+      "strategy": "strategy-engine",
+      "graph": "task-graph-builder",
+      "dispatch": "dispatcher",
+      "validation": "validator",
+      "feedback": "feedback-loop",
+      "memory": "memory-manager"
+    },
+    "worker_pool": [
+      "dev-engineer",
+      "web-builder",
+      "backend-architect",
+      "system-architect",
+      "data-analyst",
+      "devops-engineer",
+      "automation-engineer",
+      "security-engineer",
+      "qa-engineer",
+      "research-agent",
+      "product-manager",
+      "crypto-analyst"
+    ],
+    "routing": [
+      {
+        "match": "backend|api|code|script|bug|fix",
+        "agent": "dev-engineer"
+      },
+      {
+        "match": "site|landing|frontend|css|html",
+        "agent": "web-builder"
+      },
+      {
+        "match": "architecture|scalable|system design|refonte|backend design",
+        "agent": "backend-architect"
+      },
+      {
+        "match": "data|analyse|stats|csv|excel|dataset",
+        "agent": "data-analyst"
+      },
+      {
+        "match": "docker|ci|cd|deploy|infra|server",
+        "agent": "devops-engineer"
+      },
+      {
+        "match": "automation|cron|bot|workflow|orchestration",
+        "agent": "automation-engineer"
+      },
+      {
+        "match": "test|qa|validation|bug test|audit",
+        "agent": "qa-engineer"
+      },
+      {
+        "match": "research|cherche|info|doc|benchmark",
+        "agent": "research-agent"
+      },
+      {
+        "match": "product|roadmap|feature|spec",
+        "agent": "product-manager"
+      },
+      {
+        "match": "crypto|token|blockchain|wallet|defi",
+        "agent": "crypto-analyst"
+      },
+      {
+        "match": "security|auth|jwt|vuln|pentest",
+        "agent": "security-engineer"
+      }
+    ],
+    "pipeline": [
+      "intent-analyzer",
+      "strategy-engine",
+      "task-graph-builder",
+      "dispatcher",
+      "validator",
+      "feedback-loop",
+      "memory-manager"
+    ],
+    "rules": [
+      "main orchestre et livre, sans faire le travail spécialisé quand un agent existe.",
+      "intent-analyzer comprend la demande.",
+      "strategy-engine choisit la stratégie.",
+      "task-graph-builder construit les sous-tâches avec agentIds explicites.",
+      "dispatcher distribue au worker-pool.",
+      "validator fait la QA globale.",
+      "feedback-loop gère les itérations correctives.",
+      "memory-manager garde la continuité utile.",
+      "n activer que les pôles utiles selon la demande.",
+      "control est conditionnel et réservé aux tâches critiques.",
+      "transversal est toujours facultatif."
+    ]
+  }
+}
