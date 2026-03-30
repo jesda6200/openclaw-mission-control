@@ -1,7 +1,7 @@
 {
   "meta": {
     "lastTouchedVersion": "2026.3.24",
-    "lastTouchedAt": "2026-03-27T22:31:46.453Z"
+    "lastTouchedAt": "2026-03-27T21:40:34.054Z"
   },
   "wizard": {
     "lastRunAt": "2026-03-27T19:01:57.110Z",
@@ -243,7 +243,7 @@
           "openai-codex/gpt-5.4-mini",
           "openai/gpt-5.4-mini",
           "openai/gpt-5.3-codex",
-          "ollama/deepseek-coder:33b",
+          "ollama/qwen2.5-coder:14b",
           "ollama/glm-4.7-flash",
           "ollama/mistral:7b",
           "ollama/qwen3:8b",
@@ -331,9 +331,6 @@
           "fallbacks": [
             "openai-codex/gpt-5.4"
           ]
-        },
-        "subagents": {
-          "allowAgents": []
         }
       },
       {
@@ -346,9 +343,6 @@
           "fallbacks": [
             "openai-codex/gpt-5.4"
           ]
-        },
-        "subagents": {
-          "allowAgents": []
         }
       },
       {
@@ -429,13 +423,10 @@
         "workspace": "/home/damien/openclaw-agents/backend-architect",
         "agentDir": "/home/damien/.openclaw/agents/backend-architect/agent",
         "model": {
-          "primary": "ollama/qwen2.5:14b",
+          "primary": "ollama/qwen2.5-coder:14b",
           "fallbacks": [
             "openai-codex/gpt-5.4"
           ]
-        },
-        "subagents": {
-          "allowAgents": []
         }
       },
       {
@@ -444,7 +435,7 @@
         "workspace": "/home/damien/openclaw-agents/qa-engineer",
         "agentDir": "/home/damien/.openclaw/agents/qa-engineer/agent",
         "model": {
-          "primary": "ollama/qwen2.5:14b",
+          "primary": "ollama/qwen2.5-coder:14b",
           "fallbacks": [
             "openai-codex/gpt-5.4"
           ]
@@ -517,27 +508,7 @@
         "name": "intent-analyzer",
         "workspace": "/home/damien/openclaw-agents/intent-analyzer",
         "agentDir": "/home/damien/.openclaw/agents/intent-analyzer/agent",
-        "model": {
-          "primary": "ollama/qwen2.5:14b",
-          "fallbacks": [
-            "ollama/qwen2.5:14b",
-            "ollama/qwen2.5-coder:14b",
-            "ollama/gemma3:27b",
-            "ollama/qwen3:14b",
-            "openai-codex/gpt-5.4",
-            "openai-codex/gpt-5.4-mini",
-            "openai/gpt-5.4-mini",
-            "openai/gpt-5.3-codex",
-            "ollama/deepseek-coder:33b",
-            "ollama/glm-4.7-flash",
-            "ollama/mistral:7b",
-            "ollama/qwen3:8b",
-            "ollama/codellama:13b"
-          ]
-        },
-        "subagents": {
-          "allowAgents": []
-        }
+        "model": "ollama/qwen2.5:14b"
       },
       {
         "id": "strategy-engine",
@@ -597,16 +568,30 @@
       }
     },
     {
-      "agentId": "main",
+      "agentId": "intent-analyzer",
       "match": {
         "channel": "discord",
         "accountId": "default"
       }
     },
     {
-      "agentId": "main",
+      "agentId": "backend-architect",
       "match": {
         "channel": "telegram",
+        "accountId": "default"
+      }
+    },
+    {
+      "agentId": "dev-engineer",
+      "match": {
+        "channel": "signal",
+        "accountId": "default"
+      }
+    },
+    {
+      "agentId": "web-builder",
+      "match": {
+        "channel": "slack",
         "accountId": "default"
       }
     }
@@ -643,7 +628,7 @@
     "telegram": {
       "enabled": true,
       "dmPolicy": "pairing",
-      "botToken": "TELEGRAM_BOT_TOKEN_HERE",
+      "botToken": "__SET_TELEGRAM_BOT_TOKEN__",
       "groups": {
         "*": {
           "requireMention": true
@@ -654,18 +639,18 @@
     },
     "discord": {
       "enabled": true,
-      "token": "DISCORD_BOT_TOKEN_HERE",
+      "token": "__SET_DISCORD_BOT_TOKEN__",
       "groupPolicy": "allowlist",
       "streaming": "off",
       "dmPolicy": "pairing",
       "guilds": {
-        "934581475783884800": {
-          "requireMention": false,
+        "1487113309009031249": {
+          "requireMention": true,
           "users": [
             "374545703369965568"
           ],
           "channels": {
-            "934582341744066601": {
+            "1487113431130706042": {
               "allow": true
             }
           }
@@ -680,7 +665,7 @@
     "bind": "loopback",
     "auth": {
       "mode": "token",
-      "token": "OPENCLAW_GATEWAY_TOKEN_HERE"
+      "token": "__OPTIONAL_GATEWAY_TOKEN__"
     },
     "tailscale": {
       "mode": "off",

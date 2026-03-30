@@ -233,7 +233,7 @@
   "agents": {
     "defaults": {
       "model": {
-        "primary": "openai/gpt-5.4",
+        "primary": "openai/gpt-5-nano",
         "fallbacks": [
           "ollama/qwen2.5:14b",
           "ollama/qwen2.5-coder:14b",
@@ -243,7 +243,7 @@
           "openai-codex/gpt-5.4-mini",
           "openai/gpt-5.4-mini",
           "openai/gpt-5.3-codex",
-          "ollama/deepseek-coder:33b",
+          "ollama/qwen2.5-coder:14b",
           "ollama/glm-4.7-flash",
           "ollama/mistral:7b",
           "ollama/qwen3:8b",
@@ -278,7 +278,7 @@
         "id": "main",
         "name": "main",
         "model": {
-          "primary": "openai-codex/gpt-5.4",
+          "primary": "openai/gpt-5-nano",
           "fallbacks": [
             "ollama/qwen2.5:14b"
           ]
@@ -327,7 +327,7 @@
         "workspace": "/home/damien/openclaw-agents/dev-engineer",
         "agentDir": "/home/damien/.openclaw/agents/dev-engineer/agent",
         "model": {
-          "primary": "ollama/qwen2.5-coder:14b",
+          "primary": "ollama/qwen2.5-coder:32b",
           "fallbacks": [
             "openai-codex/gpt-5.4"
           ]
@@ -363,7 +363,7 @@
         "workspace": "/home/damien/openclaw-agents/ai-engineer",
         "agentDir": "/home/damien/.openclaw/agents/ai-engineer/agent",
         "model": {
-          "primary": "ollama/qwen2.5:14b",
+          "primary": "ollama/qwen2.5-coder:14b",
           "fallbacks": [
             "openai-codex/gpt-5.4"
           ]
@@ -375,7 +375,7 @@
         "workspace": "/home/damien/openclaw-agents/security-engineer",
         "agentDir": "/home/damien/.openclaw/agents/security-engineer/agent",
         "model": {
-          "primary": "ollama/qwen2.5:14b",
+          "primary": "ollama/gemma3:27b",
           "fallbacks": [
             "openai-codex/gpt-5.4"
           ]
@@ -399,7 +399,7 @@
         "workspace": "/home/damien/openclaw-agents/research-agent",
         "agentDir": "/home/damien/.openclaw/agents/research-agent/agent",
         "model": {
-          "primary": "ollama/qwen2.5:14b",
+          "primary": "openai/o3-deep-research",
           "fallbacks": [
             "openai-codex/gpt-5.4"
           ]
@@ -411,7 +411,7 @@
         "workspace": "/home/damien/openclaw-agents/crypto-analyst",
         "agentDir": "/home/damien/.openclaw/agents/crypto-analyst/agent",
         "model": {
-          "primary": "ollama/qwen2.5:14b",
+          "primary": "ollama/qwen2.5-coder:14b",
           "fallbacks": [
             "openai-codex/gpt-5.4"
           ]
@@ -423,7 +423,7 @@
         "workspace": "/home/damien/openclaw-agents/backend-architect",
         "agentDir": "/home/damien/.openclaw/agents/backend-architect/agent",
         "model": {
-          "primary": "ollama/qwen2.5:14b",
+          "primary": "ollama/qwen2.5-coder:14b",
           "fallbacks": [
             "openai-codex/gpt-5.4"
           ]
@@ -435,7 +435,7 @@
         "workspace": "/home/damien/openclaw-agents/qa-engineer",
         "agentDir": "/home/damien/.openclaw/agents/qa-engineer/agent",
         "model": {
-          "primary": "ollama/qwen2.5:14b",
+          "primary": "ollama/qwen3:8b",
           "fallbacks": [
             "openai-codex/gpt-5.4"
           ]
@@ -483,7 +483,7 @@
         "workspace": "/home/damien/openclaw-agents/memory-manager",
         "agentDir": "/home/damien/.openclaw/agents/memory-manager/agent",
         "model": {
-          "primary": "ollama/qwen2.5:14b",
+          "primary": "ollama/phi4:latest",
           "fallbacks": [
             "openai-codex/gpt-5.4-mini"
           ]
@@ -494,56 +494,72 @@
         "name": "system-architect",
         "workspace": "/home/damien/openclaw-agents/system-architect",
         "agentDir": "/home/damien/.openclaw/agents/system-architect/agent",
-        "model": "ollama/qwen2.5:14b"
+        "model": {
+          "primary": "ollama/gemma3:27b"
+        }
       },
       {
         "id": "execution-manager",
         "name": "execution-manager",
         "workspace": "/home/damien/openclaw-agents/execution-manager",
         "agentDir": "/home/damien/.openclaw/agents/execution-manager/agent",
-        "model": "ollama/qwen2.5-coder:14b"
+        "model": {
+          "primary": "ollama/qwen2.5-coder:14b"
+        }
       },
       {
         "id": "intent-analyzer",
         "name": "intent-analyzer",
         "workspace": "/home/damien/openclaw-agents/intent-analyzer",
         "agentDir": "/home/damien/.openclaw/agents/intent-analyzer/agent",
-        "model": "ollama/qwen2.5:14b"
+        "model": {
+          "primary": "ollama/mistral-nemo:latest"
+        }
       },
       {
         "id": "strategy-engine",
         "name": "strategy-engine",
         "workspace": "/home/damien/openclaw-agents/strategy-engine",
         "agentDir": "/home/damien/.openclaw/agents/strategy-engine/agent",
-        "model": "ollama/qwen2.5:14b"
+        "model": {
+          "primary": "ollama/phi4:latest"
+        }
       },
       {
         "id": "task-graph-builder",
         "name": "task-graph-builder",
         "workspace": "/home/damien/openclaw-agents/task-graph-builder",
         "agentDir": "/home/damien/.openclaw/agents/task-graph-builder/agent",
-        "model": "ollama/qwen2.5:14b"
+        "model": {
+          "primary": "ollama/qwen2.5:14b"
+        }
       },
       {
         "id": "dispatcher",
         "name": "dispatcher",
         "workspace": "/home/damien/openclaw-agents/dispatcher",
         "agentDir": "/home/damien/.openclaw/agents/dispatcher/agent",
-        "model": "ollama/qwen2.5:14b"
+        "model": {
+          "primary": "ollama/qwen3:8b"
+        }
       },
       {
         "id": "validator",
         "name": "validator",
         "workspace": "/home/damien/openclaw-agents/validator",
         "agentDir": "/home/damien/.openclaw/agents/validator/agent",
-        "model": "ollama/qwen2.5:14b"
+        "model": {
+          "primary": "openai/gpt-5-mini"
+        }
       },
       {
         "id": "feedback-loop",
         "name": "feedback-loop",
         "workspace": "/home/damien/openclaw-agents/feedback-loop",
         "agentDir": "/home/damien/.openclaw/agents/feedback-loop/agent",
-        "model": "ollama/qwen2.5:14b"
+        "model": {
+          "primary": "ollama/qwen2.5-coder:14b"
+        }
       }
     ]
   },
