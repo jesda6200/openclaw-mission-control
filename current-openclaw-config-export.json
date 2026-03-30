@@ -1,0 +1,828 @@
+{
+  "generatedAt": "2026-03-30T10:08:53Z",
+  "runtimeConfigPath": "/home/damien/.openclaw/openclaw.json",
+  "workspaceSources": {
+    "routing": "/home/damien/.openclaw/workspace/agents-routing.json",
+    "allAgentsMemory": "/home/damien/.openclaw/workspace/all_agents_memory.json"
+  },
+  "summary": {
+    "agentCount": 23,
+    "defaultModel": "openai/gpt-5.4",
+    "defaultFallbacks": [
+      "ollama/qwen2.5:14b",
+      "ollama/qwen2.5-coder:14b",
+      "ollama/gemma3:27b",
+      "ollama/qwen3:14b",
+      "openai-codex/gpt-5.4",
+      "openai-codex/gpt-5.4-mini",
+      "openai/gpt-5.4-mini",
+      "openai/gpt-5.3-codex",
+      "ollama/qwen2.5-coder:14b",
+      "ollama/glm-4.7-flash",
+      "ollama/mistral:7b",
+      "ollama/qwen3:8b",
+      "ollama/codellama:13b"
+    ],
+    "bindingsCount": 5,
+    "routingRulesCount": 11,
+    "pipelineStepsCount": 7
+  },
+  "agentsDefaults": {
+    "model": {
+      "primary": "openai/gpt-5.4",
+      "fallbacks": [
+        "ollama/qwen2.5:14b",
+        "ollama/qwen2.5-coder:14b",
+        "ollama/gemma3:27b",
+        "ollama/qwen3:14b",
+        "openai-codex/gpt-5.4",
+        "openai-codex/gpt-5.4-mini",
+        "openai/gpt-5.4-mini",
+        "openai/gpt-5.3-codex",
+        "ollama/qwen2.5-coder:14b",
+        "ollama/glm-4.7-flash",
+        "ollama/mistral:7b",
+        "ollama/qwen3:8b",
+        "ollama/codellama:13b"
+      ]
+    },
+    "models": {
+      "ollama/qwen2.5:14b": {},
+      "openai-codex/gpt-5.4": {},
+      "openai-codex/gpt-5.4-mini": {},
+      "ollama/deepseek-coder:33b": {},
+      "ollama/deepseek-r1:32b": {},
+      "ollama/qwen2.5-coder:14b": {},
+      "ollama/llama3:8b": {},
+      "ollama/codellama:13b": {},
+      "ollama/deepseek-r1:14b": {},
+      "ollama/gemma3:27b": {},
+      "ollama/glm-4.7-flash": {},
+      "ollama/mistral:7b": {},
+      "ollama/qwen3:14b": {},
+      "ollama/qwen3:8b": {},
+      "openai/gpt-5.4": {
+        "alias": "GPT"
+      },
+      "openai/gpt-5.4-mini": {},
+      "openai/gpt-5.3-codex": {}
+    },
+    "workspace": "/home/damien/.openclaw/workspace"
+  },
+  "agentsList": [
+    {
+      "id": "main",
+      "name": "main",
+      "model": {
+        "primary": "openai-codex/gpt-5.4",
+        "fallbacks": [
+          "ollama/qwen2.5:14b"
+        ]
+      },
+      "subagents": {
+        "allowAgents": [
+          "dev-engineer",
+          "web-builder",
+          "data-analyst",
+          "ai-engineer",
+          "security-engineer",
+          "devops-engineer",
+          "research-agent",
+          "crypto-analyst",
+          "backend-architect",
+          "qa-engineer",
+          "automation-engineer",
+          "product-manager",
+          "memory-manager",
+          "ui-designer",
+          "system-architect",
+          "execution-manager",
+          "intent-analyzer",
+          "strategy-engine",
+          "task-graph-builder",
+          "dispatcher",
+          "validator",
+          "feedback-loop"
+        ]
+      },
+      "tools": {
+        "alsoAllow": [
+          "browser",
+          "canvas",
+          "message",
+          "gateway",
+          "nodes",
+          "agents_list",
+          "tts"
+        ]
+      }
+    },
+    {
+      "id": "dev-engineer",
+      "name": "dev-engineer",
+      "workspace": "/home/damien/openclaw-agents/dev-engineer",
+      "agentDir": "/home/damien/.openclaw/agents/dev-engineer/agent",
+      "model": {
+        "primary": "ollama/qwen2.5-coder:14b",
+        "fallbacks": [
+          "openai-codex/gpt-5.4"
+        ]
+      }
+    },
+    {
+      "id": "web-builder",
+      "name": "web-builder",
+      "workspace": "/home/damien/openclaw-agents/web-builder",
+      "agentDir": "/home/damien/.openclaw/agents/web-builder/agent",
+      "model": {
+        "primary": "ollama/qwen2.5-coder:14b",
+        "fallbacks": [
+          "openai-codex/gpt-5.4"
+        ]
+      }
+    },
+    {
+      "id": "data-analyst",
+      "name": "data-analyst",
+      "workspace": "/home/damien/openclaw-agents/data-analyst",
+      "agentDir": "/home/damien/.openclaw/agents/data-analyst/agent",
+      "model": {
+        "primary": "ollama/qwen2.5:14b",
+        "fallbacks": [
+          "openai-codex/gpt-5.4"
+        ]
+      }
+    },
+    {
+      "id": "ai-engineer",
+      "name": "ai-engineer",
+      "workspace": "/home/damien/openclaw-agents/ai-engineer",
+      "agentDir": "/home/damien/.openclaw/agents/ai-engineer/agent",
+      "model": {
+        "primary": "ollama/qwen2.5:14b",
+        "fallbacks": [
+          "openai-codex/gpt-5.4"
+        ]
+      }
+    },
+    {
+      "id": "security-engineer",
+      "name": "security-engineer",
+      "workspace": "/home/damien/openclaw-agents/security-engineer",
+      "agentDir": "/home/damien/.openclaw/agents/security-engineer/agent",
+      "model": {
+        "primary": "ollama/qwen2.5:14b",
+        "fallbacks": [
+          "openai-codex/gpt-5.4"
+        ]
+      }
+    },
+    {
+      "id": "devops-engineer",
+      "name": "devops-engineer",
+      "workspace": "/home/damien/openclaw-agents/devops-engineer",
+      "agentDir": "/home/damien/.openclaw/agents/devops-engineer/agent",
+      "model": {
+        "primary": "ollama/qwen2.5-coder:14b",
+        "fallbacks": [
+          "openai-codex/gpt-5.4"
+        ]
+      }
+    },
+    {
+      "id": "research-agent",
+      "name": "research-agent",
+      "workspace": "/home/damien/openclaw-agents/research-agent",
+      "agentDir": "/home/damien/.openclaw/agents/research-agent/agent",
+      "model": {
+        "primary": "ollama/qwen2.5:14b",
+        "fallbacks": [
+          "openai-codex/gpt-5.4"
+        ]
+      }
+    },
+    {
+      "id": "crypto-analyst",
+      "name": "crypto-analyst",
+      "workspace": "/home/damien/openclaw-agents/crypto-analyst",
+      "agentDir": "/home/damien/.openclaw/agents/crypto-analyst/agent",
+      "model": {
+        "primary": "ollama/qwen2.5:14b",
+        "fallbacks": [
+          "openai-codex/gpt-5.4"
+        ]
+      }
+    },
+    {
+      "id": "backend-architect",
+      "name": "backend-architect",
+      "workspace": "/home/damien/openclaw-agents/backend-architect",
+      "agentDir": "/home/damien/.openclaw/agents/backend-architect/agent",
+      "model": {
+        "primary": "ollama/qwen2.5-coder:14b",
+        "fallbacks": [
+          "openai-codex/gpt-5.4"
+        ]
+      }
+    },
+    {
+      "id": "qa-engineer",
+      "name": "qa-engineer",
+      "workspace": "/home/damien/openclaw-agents/qa-engineer",
+      "agentDir": "/home/damien/.openclaw/agents/qa-engineer/agent",
+      "model": {
+        "primary": "ollama/qwen2.5-coder:14b",
+        "fallbacks": [
+          "openai-codex/gpt-5.4"
+        ]
+      }
+    },
+    {
+      "id": "automation-engineer",
+      "name": "automation-engineer",
+      "workspace": "/home/damien/openclaw-agents/automation-engineer",
+      "agentDir": "/home/damien/.openclaw/agents/automation-engineer/agent",
+      "model": {
+        "primary": "ollama/qwen2.5-coder:14b",
+        "fallbacks": [
+          "openai-codex/gpt-5.4"
+        ]
+      }
+    },
+    {
+      "id": "product-manager",
+      "name": "product-manager",
+      "workspace": "/home/damien/openclaw-agents/product-manager",
+      "agentDir": "/home/damien/.openclaw/agents/product-manager/agent",
+      "model": {
+        "primary": "ollama/qwen2.5:14b",
+        "fallbacks": [
+          "openai-codex/gpt-5.4"
+        ]
+      }
+    },
+    {
+      "id": "ui-designer",
+      "name": "ui-designer",
+      "workspace": "/home/damien/openclaw-agents/ui-designer",
+      "agentDir": "/home/damien/.openclaw/agents/ui-designer/agent",
+      "model": {
+        "primary": "ollama/qwen2.5-coder:14b",
+        "fallbacks": [
+          "openai-codex/gpt-5.4"
+        ]
+      }
+    },
+    {
+      "id": "memory-manager",
+      "name": "memory-manager",
+      "workspace": "/home/damien/openclaw-agents/memory-manager",
+      "agentDir": "/home/damien/.openclaw/agents/memory-manager/agent",
+      "model": {
+        "primary": "ollama/qwen2.5:14b",
+        "fallbacks": [
+          "openai-codex/gpt-5.4-mini"
+        ]
+      }
+    },
+    {
+      "id": "system-architect",
+      "name": "system-architect",
+      "workspace": "/home/damien/openclaw-agents/system-architect",
+      "agentDir": "/home/damien/.openclaw/agents/system-architect/agent",
+      "model": "ollama/qwen2.5:14b"
+    },
+    {
+      "id": "execution-manager",
+      "name": "execution-manager",
+      "workspace": "/home/damien/openclaw-agents/execution-manager",
+      "agentDir": "/home/damien/.openclaw/agents/execution-manager/agent",
+      "model": "ollama/qwen2.5-coder:14b"
+    },
+    {
+      "id": "intent-analyzer",
+      "name": "intent-analyzer",
+      "workspace": "/home/damien/openclaw-agents/intent-analyzer",
+      "agentDir": "/home/damien/.openclaw/agents/intent-analyzer/agent",
+      "model": "ollama/qwen2.5:14b"
+    },
+    {
+      "id": "strategy-engine",
+      "name": "strategy-engine",
+      "workspace": "/home/damien/openclaw-agents/strategy-engine",
+      "agentDir": "/home/damien/.openclaw/agents/strategy-engine/agent",
+      "model": "ollama/qwen2.5:14b"
+    },
+    {
+      "id": "task-graph-builder",
+      "name": "task-graph-builder",
+      "workspace": "/home/damien/openclaw-agents/task-graph-builder",
+      "agentDir": "/home/damien/.openclaw/agents/task-graph-builder/agent",
+      "model": "ollama/qwen2.5:14b"
+    },
+    {
+      "id": "dispatcher",
+      "name": "dispatcher",
+      "workspace": "/home/damien/openclaw-agents/dispatcher",
+      "agentDir": "/home/damien/.openclaw/agents/dispatcher/agent",
+      "model": "ollama/qwen2.5:14b"
+    },
+    {
+      "id": "validator",
+      "name": "validator",
+      "workspace": "/home/damien/openclaw-agents/validator",
+      "agentDir": "/home/damien/.openclaw/agents/validator/agent",
+      "model": "ollama/qwen2.5:14b"
+    },
+    {
+      "id": "feedback-loop",
+      "name": "feedback-loop",
+      "workspace": "/home/damien/openclaw-agents/feedback-loop",
+      "agentDir": "/home/damien/.openclaw/agents/feedback-loop/agent",
+      "model": "ollama/qwen2.5:14b"
+    }
+  ],
+  "bindings": [
+    {
+      "agentId": "main",
+      "match": {
+        "channel": "webchat",
+        "accountId": "default"
+      }
+    },
+    {
+      "agentId": "intent-analyzer",
+      "match": {
+        "channel": "discord",
+        "accountId": "default"
+      }
+    },
+    {
+      "agentId": "backend-architect",
+      "match": {
+        "channel": "telegram",
+        "accountId": "default"
+      }
+    },
+    {
+      "agentId": "dev-engineer",
+      "match": {
+        "channel": "signal",
+        "accountId": "default"
+      }
+    },
+    {
+      "agentId": "web-builder",
+      "match": {
+        "channel": "slack",
+        "accountId": "default"
+      }
+    }
+  ],
+  "channels": {
+    "telegram": {
+      "enabled": true,
+      "dmPolicy": "pairing",
+      "botToken": "8672…vYwo",
+      "groups": {
+        "*": {
+          "requireMention": true
+        }
+      },
+      "groupPolicy": "allowlist",
+      "streaming": "partial"
+    },
+    "discord": {
+      "enabled": true,
+      "token": "MTQ4…pBu8",
+      "groupPolicy": "allowlist",
+      "streaming": "off",
+      "dmPolicy": "pairing",
+      "guilds": {
+        "1487113309009031249": {
+          "requireMention": true,
+          "users": [
+            "374545703369965568"
+          ],
+          "channels": {
+            "1487113431130706042": {
+              "allow": true
+            }
+          }
+        },
+        "*": {}
+      }
+    }
+  },
+  "gateway": {
+    "port": 18789,
+    "mode": "local",
+    "bind": "loopback",
+    "auth": {
+      "mode": "token",
+      "token": "db41…205f"
+    },
+    "tailscale": {
+      "mode": "off",
+      "resetOnExit": false
+    },
+    "http": {
+      "endpoints": {
+        "responses": {
+          "enabled": true
+        }
+      }
+    }
+  },
+  "skills": {
+    "entries": {
+      "1password": {
+        "enabled": true
+      },
+      "apple-notes": {
+        "enabled": false
+      },
+      "coding-agent": {
+        "enabled": true
+      },
+      "mcporter": {
+        "enabled": true
+      },
+      "blogwatcher": {
+        "enabled": true
+      },
+      "blucli": {
+        "enabled": false
+      },
+      "clawhub": {
+        "enabled": true
+      }
+    }
+  },
+  "plugins": {
+    "entries": {
+      "duckduckgo": {
+        "enabled": true
+      }
+    }
+  },
+  "routingSpec": {
+    "agents": {
+      "orchestration": {
+        "main": "main",
+        "intent": "intent-analyzer",
+        "strategy": "strategy-engine",
+        "graph": "task-graph-builder",
+        "dispatch": "dispatcher",
+        "validation": "validator",
+        "feedback": "feedback-loop",
+        "memory": "memory-manager"
+      },
+      "worker_pool": [
+        "dev-engineer",
+        "web-builder",
+        "backend-architect",
+        "system-architect",
+        "data-analyst",
+        "devops-engineer",
+        "automation-engineer",
+        "security-engineer",
+        "qa-engineer",
+        "research-agent",
+        "product-manager",
+        "crypto-analyst"
+      ],
+      "routing": [
+        {
+          "match": "backend|api|code|script|bug|fix",
+          "agent": "dev-engineer"
+        },
+        {
+          "match": "site|landing|frontend|css|html",
+          "agent": "web-builder"
+        },
+        {
+          "match": "architecture|scalable|system design|refonte|backend design",
+          "agent": "backend-architect"
+        },
+        {
+          "match": "data|analyse|stats|csv|excel|dataset",
+          "agent": "data-analyst"
+        },
+        {
+          "match": "docker|ci|cd|deploy|infra|server",
+          "agent": "devops-engineer"
+        },
+        {
+          "match": "automation|cron|bot|workflow|orchestration",
+          "agent": "automation-engineer"
+        },
+        {
+          "match": "test|qa|validation|bug test|audit",
+          "agent": "qa-engineer"
+        },
+        {
+          "match": "research|cherche|info|doc|benchmark",
+          "agent": "research-agent"
+        },
+        {
+          "match": "product|roadmap|feature|spec",
+          "agent": "product-manager"
+        },
+        {
+          "match": "crypto|token|blockchain|wallet|defi",
+          "agent": "crypto-analyst"
+        },
+        {
+          "match": "security|auth|jwt|vuln|pentest",
+          "agent": "security-engineer"
+        }
+      ],
+      "pipeline": [
+        "intent-analyzer",
+        "strategy-engine",
+        "task-graph-builder",
+        "dispatcher",
+        "validator",
+        "feedback-loop",
+        "memory-manager"
+      ],
+      "rules": [
+        "main orchestre et livre, sans faire le travail spécialisé quand un agent existe.",
+        "intent-analyzer comprend la demande.",
+        "strategy-engine choisit la stratégie.",
+        "task-graph-builder construit les sous-tâches avec agentIds explicites.",
+        "dispatcher distribue au worker-pool.",
+        "validator fait la QA globale.",
+        "feedback-loop gère les itérations correctives.",
+        "memory-manager garde la continuité utile.",
+        "n activer que les pôles utiles selon la demande.",
+        "control est conditionnel et réservé aux tâches critiques.",
+        "transversal est toujours facultatif."
+      ]
+    }
+  },
+  "allAgentsMemoryKeys": [
+    "ai-engineer",
+    "automation-engineer",
+    "backend-architect",
+    "crypto-analyst",
+    "data-analyst",
+    "dev-engineer",
+    "devops-engineer",
+    "dispatcher",
+    "execution-manager",
+    "feedback-loop",
+    "intent-analyzer",
+    "main",
+    "memory-manager",
+    "product-manager",
+    "qa-engineer",
+    "research-agent",
+    "security-engineer",
+    "strategy-engine",
+    "system-architect",
+    "task-graph-builder",
+    "ui-designer",
+    "validator",
+    "web-builder"
+  ],
+  "agentModelsTable": [
+    {
+      "id": "main",
+      "workspace": null,
+      "agentDir": null,
+      "model": {
+        "primary": "openai-codex/gpt-5.4",
+        "fallbacks": [
+          "ollama/qwen2.5:14b"
+        ]
+      },
+      "routingRules": 1
+    },
+    {
+      "id": "dev-engineer",
+      "workspace": "/home/damien/openclaw-agents/dev-engineer",
+      "agentDir": "/home/damien/.openclaw/agents/dev-engineer/agent",
+      "model": {
+        "primary": "ollama/qwen2.5-coder:14b",
+        "fallbacks": [
+          "openai-codex/gpt-5.4"
+        ]
+      },
+      "routingRules": 1
+    },
+    {
+      "id": "web-builder",
+      "workspace": "/home/damien/openclaw-agents/web-builder",
+      "agentDir": "/home/damien/.openclaw/agents/web-builder/agent",
+      "model": {
+        "primary": "ollama/qwen2.5-coder:14b",
+        "fallbacks": [
+          "openai-codex/gpt-5.4"
+        ]
+      },
+      "routingRules": 1
+    },
+    {
+      "id": "data-analyst",
+      "workspace": "/home/damien/openclaw-agents/data-analyst",
+      "agentDir": "/home/damien/.openclaw/agents/data-analyst/agent",
+      "model": {
+        "primary": "ollama/qwen2.5:14b",
+        "fallbacks": [
+          "openai-codex/gpt-5.4"
+        ]
+      },
+      "routingRules": 0
+    },
+    {
+      "id": "ai-engineer",
+      "workspace": "/home/damien/openclaw-agents/ai-engineer",
+      "agentDir": "/home/damien/.openclaw/agents/ai-engineer/agent",
+      "model": {
+        "primary": "ollama/qwen2.5:14b",
+        "fallbacks": [
+          "openai-codex/gpt-5.4"
+        ]
+      },
+      "routingRules": 0
+    },
+    {
+      "id": "security-engineer",
+      "workspace": "/home/damien/openclaw-agents/security-engineer",
+      "agentDir": "/home/damien/.openclaw/agents/security-engineer/agent",
+      "model": {
+        "primary": "ollama/qwen2.5:14b",
+        "fallbacks": [
+          "openai-codex/gpt-5.4"
+        ]
+      },
+      "routingRules": 0
+    },
+    {
+      "id": "devops-engineer",
+      "workspace": "/home/damien/openclaw-agents/devops-engineer",
+      "agentDir": "/home/damien/.openclaw/agents/devops-engineer/agent",
+      "model": {
+        "primary": "ollama/qwen2.5-coder:14b",
+        "fallbacks": [
+          "openai-codex/gpt-5.4"
+        ]
+      },
+      "routingRules": 0
+    },
+    {
+      "id": "research-agent",
+      "workspace": "/home/damien/openclaw-agents/research-agent",
+      "agentDir": "/home/damien/.openclaw/agents/research-agent/agent",
+      "model": {
+        "primary": "ollama/qwen2.5:14b",
+        "fallbacks": [
+          "openai-codex/gpt-5.4"
+        ]
+      },
+      "routingRules": 0
+    },
+    {
+      "id": "crypto-analyst",
+      "workspace": "/home/damien/openclaw-agents/crypto-analyst",
+      "agentDir": "/home/damien/.openclaw/agents/crypto-analyst/agent",
+      "model": {
+        "primary": "ollama/qwen2.5:14b",
+        "fallbacks": [
+          "openai-codex/gpt-5.4"
+        ]
+      },
+      "routingRules": 0
+    },
+    {
+      "id": "backend-architect",
+      "workspace": "/home/damien/openclaw-agents/backend-architect",
+      "agentDir": "/home/damien/.openclaw/agents/backend-architect/agent",
+      "model": {
+        "primary": "ollama/qwen2.5-coder:14b",
+        "fallbacks": [
+          "openai-codex/gpt-5.4"
+        ]
+      },
+      "routingRules": 1
+    },
+    {
+      "id": "qa-engineer",
+      "workspace": "/home/damien/openclaw-agents/qa-engineer",
+      "agentDir": "/home/damien/.openclaw/agents/qa-engineer/agent",
+      "model": {
+        "primary": "ollama/qwen2.5-coder:14b",
+        "fallbacks": [
+          "openai-codex/gpt-5.4"
+        ]
+      },
+      "routingRules": 0
+    },
+    {
+      "id": "automation-engineer",
+      "workspace": "/home/damien/openclaw-agents/automation-engineer",
+      "agentDir": "/home/damien/.openclaw/agents/automation-engineer/agent",
+      "model": {
+        "primary": "ollama/qwen2.5-coder:14b",
+        "fallbacks": [
+          "openai-codex/gpt-5.4"
+        ]
+      },
+      "routingRules": 0
+    },
+    {
+      "id": "product-manager",
+      "workspace": "/home/damien/openclaw-agents/product-manager",
+      "agentDir": "/home/damien/.openclaw/agents/product-manager/agent",
+      "model": {
+        "primary": "ollama/qwen2.5:14b",
+        "fallbacks": [
+          "openai-codex/gpt-5.4"
+        ]
+      },
+      "routingRules": 0
+    },
+    {
+      "id": "ui-designer",
+      "workspace": "/home/damien/openclaw-agents/ui-designer",
+      "agentDir": "/home/damien/.openclaw/agents/ui-designer/agent",
+      "model": {
+        "primary": "ollama/qwen2.5-coder:14b",
+        "fallbacks": [
+          "openai-codex/gpt-5.4"
+        ]
+      },
+      "routingRules": 0
+    },
+    {
+      "id": "memory-manager",
+      "workspace": "/home/damien/openclaw-agents/memory-manager",
+      "agentDir": "/home/damien/.openclaw/agents/memory-manager/agent",
+      "model": {
+        "primary": "ollama/qwen2.5:14b",
+        "fallbacks": [
+          "openai-codex/gpt-5.4-mini"
+        ]
+      },
+      "routingRules": 0
+    },
+    {
+      "id": "system-architect",
+      "workspace": "/home/damien/openclaw-agents/system-architect",
+      "agentDir": "/home/damien/.openclaw/agents/system-architect/agent",
+      "model": "ollama/qwen2.5:14b",
+      "routingRules": 0
+    },
+    {
+      "id": "execution-manager",
+      "workspace": "/home/damien/openclaw-agents/execution-manager",
+      "agentDir": "/home/damien/.openclaw/agents/execution-manager/agent",
+      "model": "ollama/qwen2.5-coder:14b",
+      "routingRules": 0
+    },
+    {
+      "id": "intent-analyzer",
+      "workspace": "/home/damien/openclaw-agents/intent-analyzer",
+      "agentDir": "/home/damien/.openclaw/agents/intent-analyzer/agent",
+      "model": "ollama/qwen2.5:14b",
+      "routingRules": 1
+    },
+    {
+      "id": "strategy-engine",
+      "workspace": "/home/damien/openclaw-agents/strategy-engine",
+      "agentDir": "/home/damien/.openclaw/agents/strategy-engine/agent",
+      "model": "ollama/qwen2.5:14b",
+      "routingRules": 0
+    },
+    {
+      "id": "task-graph-builder",
+      "workspace": "/home/damien/openclaw-agents/task-graph-builder",
+      "agentDir": "/home/damien/.openclaw/agents/task-graph-builder/agent",
+      "model": "ollama/qwen2.5:14b",
+      "routingRules": 0
+    },
+    {
+      "id": "dispatcher",
+      "workspace": "/home/damien/openclaw-agents/dispatcher",
+      "agentDir": "/home/damien/.openclaw/agents/dispatcher/agent",
+      "model": "ollama/qwen2.5:14b",
+      "routingRules": 0
+    },
+    {
+      "id": "validator",
+      "workspace": "/home/damien/openclaw-agents/validator",
+      "agentDir": "/home/damien/.openclaw/agents/validator/agent",
+      "model": "ollama/qwen2.5:14b",
+      "routingRules": 0
+    },
+    {
+      "id": "feedback-loop",
+      "workspace": "/home/damien/openclaw-agents/feedback-loop",
+      "agentDir": "/home/damien/.openclaw/agents/feedback-loop/agent",
+      "model": "ollama/qwen2.5:14b",
+      "routingRules": 0
+    }
+  ]
+}
