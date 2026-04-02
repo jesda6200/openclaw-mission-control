@@ -29,6 +29,12 @@ const PERMANENT_FAILURE_PATTERNS = [
   "returned 401",
 ];
 
+/** Patterns that indicate a specific tool is unavailable — not worth retrying via HTTP. */
+const TOOL_UNAVAILABLE_PATTERNS = [
+  "tool not available",
+  "returned 404",
+];
+
 function isPermanentHttpFailure(reason: string): boolean {
   const lower = reason.toLowerCase();
   return PERMANENT_FAILURE_PATTERNS.some((p) => lower.includes(p));
@@ -55,9 +61,47 @@ export class AutoTransport implements OpenClawClient {
   private permanentCliMode = false;
   private consecutiveHttpFailures = 0;
 
+  /**
+   * Cache of tools that returned 404 ("Tool not available") via HTTP.
+   * These skip HTTP entirely and go straight to CLI, avoiding wasted
+   * round-trips and CLI queue pressure from fallback pile-ups.
+   * Entries expire after 60s so new gateway deploys are picked up.
+   */
+  private unavailableTools = new Map<string, number>();
+  private readonly toolUnavailableTtlMs = 60_000;
+
   /** CLI concurrency limiter — prevents subprocess storms during gateway restarts. */
   private activeCli = 0;
-  private readonly maxCli = 4;
+  private readonly maxCli = 6;
+
+  /** Check if a tool is known to be unavailable via HTTP (cached 404). */
+  private isToolUnavailable(tool: string): boolean {
+    const ts = this.unavailableTools.get(tool);
+    if (!ts) return false;
+    if (Date.now() - ts > this.toolUnavailableTtlMs) {
+      this.unavailableTools.delete(tool);
+      return false;
+    }
+    return true;
+  }
+
+  /** Mark a tool as unavailable via HTTP after a 404. */
+  private markToolUnavailable(reason: string): void {
+    const lower = reason.toLowerCase();
+    if (TOOL_UNAVAILABLE_PATTERNS.some((p) => lower.includes(p))) {
+      // Extract tool name from error like "Gateway /tools/invoke exec returned 404"
+      const match = reason.match(/\/tools\/invoke\s+(\S+)/);
+      if (match) {
+        this.unavailableTools.set(match[1], Date.now());
+      }
+    }
+  }
+
+  /** Extract the tool name from CLI args (e.g., ["skills", "list"] → "exec"). */
+  private toolForArgs(_args: string[]): string {
+    // All CLI commands go through the "exec" tool on the HTTP transport
+    return "exec";
+  }
 
   getTransport(): TransportMode {
     return "auto";
@@ -78,6 +122,10 @@ export class AutoTransport implements OpenClawClient {
   }
 
   private markHttpFailed(reason: string): void {
+    // Track tool-specific unavailability (e.g., "exec" returning 404).
+    // This prevents repeated HTTP attempts for tools the gateway doesn't support.
+    this.markToolUnavailable(reason);
+
     const wasHttp = this.preferHttp;
     this.preferHttp = false;
     this.consecutiveHttpFailures++;
@@ -163,17 +211,26 @@ export class AutoTransport implements OpenClawClient {
     return this.preferHttp ? this.http : this.cli;
   }
 
-  /** Execute with automatic fallback on HTTP failure. */
+  /**
+   * Execute with automatic fallback on HTTP failure.
+   * Skips HTTP entirely for tools known to be unavailable (cached 404).
+   */
   private async withFallback<T>(
     fn: (client: OpenClawClient) => Promise<T>,
+    tool?: string,
   ): Promise<T> {
+    // If this tool is known to be unavailable via HTTP, skip straight to CLI.
+    if (tool && this.isToolUnavailable(tool)) {
+      return fn(this.cli);
+    }
     const primary = await this.pick();
     try {
       return await fn(primary);
     } catch (err) {
       if (primary === this.http) {
         this.markHttpFailed(errorToMessage(err));
-        // Concurrency cap — stop runaway subprocess storms.
+        // CLI fallback — the underlying CLI semaphore handles queuing.
+        // Only hard-reject if we're way over capacity to prevent OOM.
         if (this.activeCli >= this.maxCli) {
           throw new Error("Gateway busy — too many pending CLI operations");
         }
@@ -191,53 +248,31 @@ export class AutoTransport implements OpenClawClient {
   // ── OpenClawClient interface ──────────────────────
 
   runJson<T>(args: string[], timeout?: number): Promise<T> {
-    return this.withFallback((c) => c.runJson<T>(args, timeout));
+    return this.withFallback((c) => c.runJson<T>(args, timeout), this.toolForArgs(args));
   }
 
   run(args: string[], timeout?: number, stdin?: string): Promise<string> {
-    return this.withFallback((c) => c.run(args, timeout, stdin));
+    return this.withFallback((c) => c.run(args, timeout, stdin), this.toolForArgs(args));
   }
 
   async runCapture(args: string[], timeout?: number): Promise<RunCliResult> {
-    if (this.permanentCliMode) {
-      if (this.activeCli >= this.maxCli) {
-        return { code: 1, stdout: "", stderr: "Gateway busy — too many pending CLI operations" };
-      }
-      this.activeCli++;
-      try {
-        return await this.cli.runCapture(args, timeout);
-      } finally {
-        this.activeCli--;
-      }
+    const tool = this.toolForArgs(args);
+
+    // If tool is known-unavailable via HTTP, or we're in permanent CLI mode, skip HTTP.
+    if (this.permanentCliMode || this.isToolUnavailable(tool)) {
+      return this.cli.runCapture(args, timeout);
     }
     await this.probe();
     if (this.preferHttp) {
       const result = await this.http.runCapture(args, timeout);
       if (result.code !== 0 && result.stderr?.includes("/tools/invoke")) {
         this.markHttpFailed(result.stderr || `openclaw ${args.join(" ")} failed over HTTP`);
-        // Concurrency limit before falling to CLI.
-        if (this.activeCli >= this.maxCli) {
-          return { code: 1, stdout: "", stderr: "Gateway busy — too many pending CLI operations" };
-        }
-        this.activeCli++;
-        try {
-          return await this.cli.runCapture(args, timeout);
-        } finally {
-          this.activeCli--;
-        }
+        return this.cli.runCapture(args, timeout);
       }
       return result;
     }
-    // CLI-only path — apply concurrency limit.
-    if (this.activeCli >= this.maxCli) {
-      return { code: 1, stdout: "", stderr: "Gateway busy — too many pending CLI operations" };
-    }
-    this.activeCli++;
-    try {
-      return await this.cli.runCapture(args, timeout);
-    } finally {
-      this.activeCli--;
-    }
+    // CLI-only path — let the CLI semaphore handle queuing.
+    return this.cli.runCapture(args, timeout);
   }
 
   async gatewayRpc<T>(

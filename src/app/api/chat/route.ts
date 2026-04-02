@@ -107,28 +107,40 @@ function extractContent(messages: Message[]): {
 // ── Streaming via OpenResponses API ─────────────────
 
 /**
- * Parse SSE chunks and extract text deltas from OpenResponses events.
- * Returns an async generator that yields text fragments.
+ * Derive a human-friendly label for a tool/function call.
+ */
+function toolDisplayName(name: string): string {
+  // Strip common prefixes and make readable
+  return name
+    .replace(/^(functions?\.|tools?\.)/, "")
+    .replace(/[_-]/g, " ")
+    .replace(/\b\w/g, (c) => c.toUpperCase());
+}
+
+/**
+ * Parse SSE chunks and extract text deltas + tool call activity from
+ * OpenResponses events. Yields text fragments (including inline tool
+ * call markers that the chat UI renders as collapsible blocks).
  */
 async function* parseOpenResponsesStream(
   reader: ReadableStreamDefaultReader<Uint8Array>,
 ): AsyncGenerator<string> {
   const decoder = new TextDecoder();
   let buffer = "";
+  // Track in-flight tool calls so we can emit start/end markers
+  const activeCalls = new Map<string, string>(); // callId → toolName
 
   while (true) {
     const { done, value } = await reader.read();
     if (done) {
-      // Flush remaining decoder bytes + any trailing buffer content
       buffer += decoder.decode();
       break;
     }
 
     buffer += decoder.decode(value, { stream: true });
 
-    // Process complete SSE lines
     const lines = buffer.split("\n");
-    buffer = lines.pop() || ""; // keep incomplete line in buffer
+    buffer = lines.pop() || "";
 
     for (const line of lines) {
       if (!line.startsWith("data: ")) continue;
@@ -137,11 +149,66 @@ async function* parseOpenResponsesStream(
 
       try {
         const event = JSON.parse(data);
-        // Extract text deltas from OpenResponses events
+
+        // ── Text deltas (existing) ──
         if (event.type === "response.output_text.delta" && event.delta) {
           yield event.delta;
+          continue;
         }
-        // Handle error events
+
+        // ── Tool/function call started ──
+        if (event.type === "response.output_item.added" && event.item) {
+          const item = event.item;
+          if (item.type === "function_call" && item.name) {
+            const callId = item.call_id || item.id || `call_${Date.now()}`;
+            const name = item.name;
+            activeCalls.set(callId, name);
+            yield `\n\n\u{200B}[[TOOL_START:${callId}:${name}:${toolDisplayName(name)}]]\u{200B}\n\n`;
+            continue;
+          }
+          // Agent handoff / delegation
+          if (item.type === "agent_handoff" || item.type === "agent_delegation") {
+            const target = item.agent || item.name || item.target || "sub-agent";
+            const callId = item.id || `handoff_${Date.now()}`;
+            activeCalls.set(callId, `agent:${target}`);
+            yield `\n\n\u{200B}[[AGENT_START:${callId}:${target}]]\u{200B}\n\n`;
+            continue;
+          }
+        }
+
+        // ── Tool/function call completed ──
+        if (event.type === "response.output_item.done" && event.item) {
+          const item = event.item;
+          const callId = item.call_id || item.id || "";
+          if (
+            (item.type === "function_call" || item.type === "agent_handoff" || item.type === "agent_delegation") &&
+            callId &&
+            activeCalls.has(callId)
+          ) {
+            activeCalls.delete(callId);
+            yield `\n\n\u{200B}[[TOOL_END:${callId}]]\u{200B}\n\n`;
+            continue;
+          }
+        }
+
+        // ── Function call arguments streaming (attach to existing block) ──
+        if (event.type === "response.function_call_arguments.done") {
+          const callId = event.call_id || "";
+          if (callId && activeCalls.has(callId)) {
+            try {
+              const args = typeof event.arguments === "string"
+                ? event.arguments
+                : JSON.stringify(event.arguments);
+              // Emit args as a detail line inside the tool block
+              if (args && args !== "{}") {
+                yield `\n\u{200B}[[TOOL_ARGS:${callId}:${args}]]\u{200B}\n`;
+              }
+            } catch { /* skip malformed args */ }
+          }
+          continue;
+        }
+
+        // ── Error events ──
         if (event.type === "response.failed" && event.response?.error) {
           yield `\n\nError: ${event.response.error.message || "Agent encountered an error"}`;
           return;

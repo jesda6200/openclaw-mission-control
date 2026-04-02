@@ -5,14 +5,20 @@ import { getOpenClawBin } from "./paths";
 const exec = promisify(execFile);
 
 /** Env vars for all CLI subprocesses. Mission Control is always a trusted local process. */
-const CLI_ENV = { ...process.env, NO_COLOR: "1", OPENCLAW_ALLOW_INSECURE_PRIVATE_WS: "1" };
+const CLI_ENV = {
+  ...process.env,
+  NO_COLOR: "1",
+  FORCE_COLOR: "0",
+  TERM: "dumb",
+  OPENCLAW_ALLOW_INSECURE_PRIVATE_WS: "1",
+};
 
 // ── Concurrency semaphore ──────────────────────────────────────────────────
 // Caps the number of simultaneously live CLI subprocesses. Callers that
 // exceed the limit are queued and resume in FIFO order as slots free up.
 
-const CLI_MAX_CONCURRENT = 4;
-const CLI_MAX_QUEUED = 12;
+const CLI_MAX_CONCURRENT = 6;
+const CLI_MAX_QUEUED = 20;
 let cliInFlight = 0;
 const cliQueue: Array<() => void> = [];
 
@@ -192,14 +198,18 @@ export async function runCliJson<T>(
     const stdout = await runCli([...args, "--json"], timeout);
     return parseJsonFromCliOutput<T>(stdout, `openclaw ${args.join(" ")} --json`);
   } catch (err) {
-    const stdout = typeof (err as { stdout?: unknown })?.stdout === "string"
-      ? String((err as { stdout?: unknown }).stdout)
-      : "";
-    if (stdout.trim()) {
-      try {
-        return parseJsonFromCliOutput<T>(stdout, `openclaw ${args.join(" ")} --json`);
-      } catch {
-        // Fall through to original error.
+    // On non-zero exit, try to recover JSON from stdout or stderr.
+    // Some OpenClaw versions write JSON to stderr when there's no TTY.
+    const errObj = err as { stdout?: unknown; stderr?: unknown };
+    const stdout = typeof errObj?.stdout === "string" ? String(errObj.stdout) : "";
+    const stderr = typeof errObj?.stderr === "string" ? String(errObj.stderr) : "";
+    for (const output of [stdout, stderr]) {
+      if (output.trim()) {
+        try {
+          return parseJsonFromCliOutput<T>(output, `openclaw ${args.join(" ")} --json`);
+        } catch {
+          // Not valid JSON in this stream — try the next one.
+        }
       }
     }
     throw err;
