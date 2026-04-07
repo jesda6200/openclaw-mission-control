@@ -38,7 +38,7 @@ import {
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { requestRestart } from "@/lib/restart-store";
-import { SectionBody, SectionLayout } from "@/components/section-layout";
+import { SectionBody, SectionHeader, SectionLayout } from "@/components/section-layout";
 import { InlineSpinner, LoadingState } from "@/components/ui/loading-state";
 import { SubagentsManagerView } from "@/components/subagents-manager-view";
 import { ModelsView } from "@/components/models-view";
@@ -3218,6 +3218,191 @@ function WorkspaceFilesModal({
   );
 }
 
+
+function SummaryBar({ agents }: { agents: Agent[] }) {
+  const total = agents.length;
+  const active = agents.filter((agent) => agent.status === "active").length;
+  const idle = agents.filter((agent) => agent.status === "idle").length;
+  const sessions = agents.reduce((sum, agent) => sum + agent.sessionCount, 0);
+
+  const items = [
+    { label: "Agents", value: total },
+    { label: "Active", value: active },
+    { label: "Idle", value: idle },
+    { label: "Sessions", value: sessions },
+  ];
+
+  return (
+    <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+      {items.map((item) => (
+        <div
+          key={item.label}
+          className="rounded-xl border border-foreground/10 bg-foreground/5 px-4 py-3"
+        >
+          <p className="text-[11px] uppercase tracking-wide text-muted-foreground/60">
+            {item.label}
+          </p>
+          <p className="mt-1 text-lg font-semibold text-foreground">
+            {item.value}
+          </p>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+function GridView({
+  agents,
+  selectedId,
+  onSelect,
+}: {
+  agents: Agent[];
+  selectedId: string | null;
+  onSelect: (id: string) => void;
+}) {
+  return (
+    <div className="grid gap-3 lg:grid-cols-2 2xl:grid-cols-3">
+      {agents.map((agent) => {
+        const selected = agent.id === selectedId;
+        return (
+          <button
+            key={agent.id}
+            type="button"
+            onClick={() => onSelect(agent.id)}
+            className={cn(
+              "rounded-2xl border px-4 py-3 text-left transition-colors",
+              selected
+                ? "border-[var(--accent-brand-border)] bg-[var(--accent-brand-subtle)]"
+                : "border-foreground/10 bg-foreground/5 hover:bg-foreground/10"
+            )}
+          >
+            <div className="flex items-start justify-between gap-3">
+              <div className="min-w-0">
+                <div className="flex items-center gap-2">
+                  <span className="text-base">{agent.emoji}</span>
+                  <p className="truncate text-sm font-semibold text-foreground">
+                    {agent.name}
+                  </p>
+                </div>
+                <p className="mt-1 truncate text-xs text-muted-foreground">
+                  {agent.id} · {shortModel(agent.model)}
+                </p>
+              </div>
+              <span
+                className={cn(
+                  "rounded-full px-2 py-0.5 text-[10px] font-medium",
+                  agent.status === "active"
+                    ? "bg-emerald-500/15 text-emerald-400"
+                    : agent.status === "idle"
+                      ? "bg-amber-500/15 text-amber-400"
+                      : "bg-foreground/10 text-muted-foreground"
+                )}
+              >
+                {agent.status}
+              </span>
+            </div>
+
+            <div className="mt-3 grid grid-cols-2 gap-2 text-xs text-muted-foreground">
+              <div className="rounded-lg bg-black/10 px-2 py-1.5">
+                Sessions: {agent.sessionCount}
+              </div>
+              <div className="rounded-lg bg-black/10 px-2 py-1.5">
+                Tokens: {formatTokens(agent.totalTokens)}
+              </div>
+            </div>
+          </button>
+        );
+      })}
+    </div>
+  );
+}
+
+function AgentDetail({
+  agent,
+  idx,
+  allAgents,
+  onUpdated,
+}: {
+  agent: Agent;
+  idx: number;
+  allAgents: Agent[];
+  onUpdated: () => void;
+}) {
+  return (
+    <div className="rounded-2xl border border-foreground/10 bg-foreground/5 p-4">
+      <div className="flex items-start justify-between gap-3">
+        <div className="min-w-0">
+          <div className="flex items-center gap-2">
+            <span className="text-lg">{agent.emoji}</span>
+            <h3 className="truncate text-base font-semibold text-foreground">
+              {agent.name}
+            </h3>
+          </div>
+          <p className="mt-1 text-xs text-muted-foreground">
+            Ordre {idx + 1}/{allAgents.length} · {agent.id}
+          </p>
+        </div>
+
+        <button
+          type="button"
+          onClick={onUpdated}
+          className="rounded-lg border border-foreground/10 px-3 py-1.5 text-xs text-muted-foreground hover:bg-foreground/5"
+        >
+          Refresh
+        </button>
+      </div>
+
+      <div className="mt-4 grid gap-3 md:grid-cols-2">
+        <div className="rounded-xl bg-black/10 px-3 py-2">
+          <p className="text-[11px] uppercase tracking-wide text-muted-foreground/60">
+            Model
+          </p>
+          <p className="mt-1 text-sm text-foreground">{agent.model}</p>
+        </div>
+
+        <div className="rounded-xl bg-black/10 px-3 py-2">
+          <p className="text-[11px] uppercase tracking-wide text-muted-foreground/60">
+            Workspace
+          </p>
+          <p className="mt-1 break-all text-sm text-foreground">{agent.workspace}</p>
+        </div>
+
+        <div className="rounded-xl bg-black/10 px-3 py-2">
+          <p className="text-[11px] uppercase tracking-wide text-muted-foreground/60">
+            Status
+          </p>
+          <p className="mt-1 text-sm text-foreground">{agent.status}</p>
+        </div>
+
+        <div className="rounded-xl bg-black/10 px-3 py-2">
+          <p className="text-[11px] uppercase tracking-wide text-muted-foreground/60">
+            Last active
+          </p>
+          <p className="mt-1 text-sm text-foreground">{formatAgo(agent.lastActive)}</p>
+        </div>
+      </div>
+
+      {agent.bindings.length > 0 && (
+        <div className="mt-4">
+          <p className="text-[11px] uppercase tracking-wide text-muted-foreground/60">
+            Bindings
+          </p>
+          <div className="mt-2 flex flex-wrap gap-2">
+            {agent.bindings.map((binding) => (
+              <span
+                key={binding}
+                className="rounded-full border border-foreground/10 bg-black/10 px-2.5 py-1 text-xs text-foreground/80"
+              >
+                {binding}
+              </span>
+            ))}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
 /* ================================================================
    Main Export
    ================================================================ */
@@ -3439,9 +3624,13 @@ export function AgentsView() {
         <AlertCircle className="h-8 w-8 text-red-400" />
         <p className="text-sm">Failed to load agents</p>
         <p className="text-xs text-muted-foreground/60">{error}</p>
-        <button type="button" onClick={fetchAgents} className="rounded-lg bg-foreground/5 px-3 py-1.5 text-xs text-foreground/70 hover:bg-foreground/10">
-          Retry
-        </button>
+        <button
+    type="button"
+    onClick={fetchAgents}
+    className="rounded-lg bg-foreground/5 px-3 py-1.5 text-xs text-foreground hover:bg-foreground/10"
+  >
+    Retry
+  </button>
       </div>
     );
   }
@@ -3594,6 +3783,7 @@ export function AgentsView() {
           onOpenDocument={openDocumentForWorkspace}
         />
       )}
-    </SectionLayout>
+          </div>
+</SectionLayout>
   );
 }
