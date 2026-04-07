@@ -3656,7 +3656,7 @@ export function AgentsView() {
             Agents
           </span>
         }
-        description={sectionDescription}
+        description="Monitor agents, delegation paths, workspaces, channels, and runtime activity."
         actions={
           <div className="flex flex-wrap items-center gap-2">
             {/* Unified view switcher — pill segmented control */}
