@@ -41,7 +41,7 @@ export function HierarchyCanvas({
     }
     const timer = window.setTimeout(() => setHighlightMain(false), 1400);
     return () => window.clearTimeout(timer);
-  }, [focusSignal, layout.mainAgent?.id]);
+  }, [focusSignal, layout.mainAgent]);
 
   const groups = layout.groups;
   const orphanGroups = useMemo(

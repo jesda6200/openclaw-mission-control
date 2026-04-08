@@ -41,6 +41,8 @@ export type HierarchyNodeDatum = {
   isMain: boolean;
 };
 
+export type HierarchyDensity = "roomy" | "tight" | "compact";
+
 export type HierarchyLayout = {
   groups: Array<{
     id: string;
@@ -49,6 +51,7 @@ export type HierarchyLayout = {
   }>;
   orphanAgents: HierarchyNodeDatum[];
   mainAgent: HierarchyNodeDatum | null;
+  density: HierarchyDensity;
   stats: {
     total: number;
     filtered: number;
@@ -77,6 +80,12 @@ const STATUS_ORDER: Record<string, number> = {
   unknown: 2,
   error: 3,
 };
+
+function resolveDensity(totalVisible: number): HierarchyDensity {
+  if (totalVisible >= 24) return "compact";
+  if (totalVisible >= 12) return "tight";
+  return "roomy";
+}
 
 function toNode(agent: HierarchyAgentInput, mainAgentId: string): HierarchyNodeDatum {
   const delegateCount = agent.subagents?.length ?? 0;
@@ -138,9 +147,13 @@ export function useHierarchyLayout({ agents, groups, filterMode, mainAgentId }: 
     const mainAgentSource = agents.find((agent) => agent.id === mainAgentId) ?? null;
     const mainAgent = mainAgentSource ? toNode(mainAgentSource, mainAgentId) : null;
 
+    const filteredCount =
+      groupedAgents.reduce((sum, group) => sum + group.agents.length, 0) +
+      orphanAgents.length +
+      (mainAgent ? 1 : 0);
     const stats = {
       total: agents.length,
-      filtered: groupedAgents.reduce((sum, group) => sum + group.agents.length, 0) + orphanAgents.length + (mainAgent ? 1 : 0),
+      filtered: filteredCount,
       delegated: agents.filter((agent) => (agent.subagents?.length ?? 0) + (agent.runtimeSubagents?.length ?? 0) > 0).length,
       unhealthy: agents.filter((agent) => agent.status !== "active").length,
       active: agents.filter((agent) => agent.status === "active").length,
@@ -150,6 +163,7 @@ export function useHierarchyLayout({ agents, groups, filterMode, mainAgentId }: 
       groups: groupedAgents.filter((group) => group.agents.length > 0),
       orphanAgents,
       mainAgent,
+      density: resolveDensity(filteredCount || agents.length),
       stats,
     };
   }, [agents, filterMode, groups, mainAgentId]);

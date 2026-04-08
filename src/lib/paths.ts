@@ -20,8 +20,10 @@
 import { execFile } from "child_process";
 import { promisify } from "util";
 import { join } from "path";
-import { access } from "fs/promises";
+import { readFileSync, constants } from 'node:fs';
 import { homedir } from "os";
+
+import { access } from 'node:fs/promises';
 
 const exec = promisify(execFile);
 
@@ -130,7 +132,7 @@ const BIN_CANDIDATES = [
 
 async function fileExists(p: string): Promise<boolean> {
   try {
-    await access(p);
+    await access(p, constants.F_OK);
     return true;
   } catch {
     return false;
@@ -365,7 +367,6 @@ export function getGatewayToken(): string {
 
   // 2. Read from config (sync — token is needed synchronously by callers)
   try {
-    const { readFileSync } = require("fs");
     const configPath = join(getOpenClawHome(), "openclaw.json");
     const raw = readFileSync(configPath, "utf-8");
     const config = JSON.parse(raw);

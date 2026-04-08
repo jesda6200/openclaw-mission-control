@@ -1651,7 +1651,7 @@ function AddAgentModal({
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 sm:p-4">
       <div className="absolute inset-0 bg-black/60 backdrop-blur-sm animate-backdrop-in" onClick={() => { if (!busy) onClose(); }} />
 
-      <div className="relative z-10 flex max-h-[calc(100vh-3rem)] w-full max-w-lg flex-col overflow-hidden rounded-2xl glass-strong animate-modal-in">
+      <div className="relative z-10 flex max-h-[calc(100vh-5rem)] w-full max-w-lg flex-col overflow-hidden rounded-2xl glass-strong animate-modal-in">
         {/* Header */}
         <div className="flex shrink-0 items-center justify-between border-b border-foreground/10 px-4 py-4">
           <div className="flex items-center gap-2.5">
@@ -2263,7 +2263,7 @@ function EditAgentModal({
         }}
       />
 
-      <div className="relative z-10 flex h-full max-h-[calc(100vh-3rem)] w-full max-w-xl flex-col overflow-hidden rounded-2xl glass-strong animate-modal-in">
+      <div className="relative z-10 flex h-full max-h-[calc(100vh-5rem)] w-full max-w-xl flex-col overflow-hidden rounded-2xl glass-strong animate-modal-in">
         {/* ── Header ── */}
         <div className="flex shrink-0 items-center justify-between border-b border-foreground/10 px-4 py-4">
           <div className="flex items-center gap-2">
@@ -3089,7 +3089,7 @@ function WorkspaceFilesModal({
         onClick={onClose}
       />
 
-      <div className="relative z-10 flex max-h-[calc(100vh-3rem)] w-full max-w-3xl flex-col overflow-hidden rounded-2xl glass-strong animate-modal-in">
+      <div className="relative z-10 flex max-h-[calc(100vh-5rem)] w-full max-w-3xl flex-col overflow-hidden rounded-2xl glass-strong animate-modal-in">
         <div className="flex shrink-0 items-center justify-between border-b border-foreground/10 px-4 py-4">
           <div className="min-w-0">
             <div className="flex items-center gap-2">
@@ -3643,9 +3643,9 @@ export function AgentsView() {
       >
         <div className="pointer-events-none absolute inset-0">
           <div className="absolute inset-0" style={{ background: "var(--agents-page-bg)" }} />
-          <div className="absolute left-[6%] top-16 h-56 w-56 rounded-full blur-3xl" style={{ background: "var(--agents-orb-a)" }} />
-          <div className="absolute right-[8%] top-20 h-64 w-64 rounded-full blur-3xl" style={{ background: "var(--agents-orb-b)" }} />
-          <div className="absolute bottom-[-8rem] left-[28%] h-56 w-56 rounded-full blur-3xl" style={{ background: "var(--agents-orb-c)" }} />
+          <div className="absolute left-[6%] top-16 h-40 w-40 rounded-full blur-3xl" style={{ background: "var(--agents-orb-a)" }} />
+          <div className="absolute right-[8%] top-20 h-48 w-48 rounded-full blur-3xl" style={{ background: "var(--agents-orb-b)" }} />
+          <div className="absolute bottom-[-8rem] left-[28%] h-40 w-40 rounded-full blur-3xl" style={{ background: "var(--agents-orb-c)" }} />
         </div>
       <SectionHeader
         title={
