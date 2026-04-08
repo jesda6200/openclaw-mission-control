@@ -836,7 +836,7 @@ function ModelPicker({
             })}
 
             {Object.keys(filteredGroups).length === 0 && search && (
-              <div className="px-3 py-6 text-center text-xs text-muted-foreground/50">
+              <div className="px-3 py-3 text-center text-xs text-muted-foreground/50">
                 No models match &ldquo;{search}&rdquo;
               </div>
             )}
@@ -1648,12 +1648,12 @@ function AddAgentModal({
   }, [name, displayName, model, fallbacks, setAsDefault, subagents, workspace, agentDir, bindings, onCreated, onClose]);
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 sm:p-6">
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 sm:p-4">
       <div className="absolute inset-0 bg-black/60 backdrop-blur-sm animate-backdrop-in" onClick={() => { if (!busy) onClose(); }} />
 
-      <div className="relative z-10 flex max-h-[calc(100vh-2rem)] w-full max-w-lg flex-col overflow-hidden rounded-2xl glass-strong animate-modal-in">
+      <div className="relative z-10 flex max-h-[calc(100vh-3rem)] w-full max-w-lg flex-col overflow-hidden rounded-2xl glass-strong animate-modal-in">
         {/* Header */}
-        <div className="flex shrink-0 items-center justify-between border-b border-foreground/10 px-5 py-4">
+        <div className="flex shrink-0 items-center justify-between border-b border-foreground/10 px-4 py-4">
           <div className="flex items-center gap-2.5">
             <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-[var(--accent-brand-subtle)]">
               <Sparkles className="h-4 w-4 text-[var(--accent-brand-text)]" />
@@ -1669,9 +1669,9 @@ function AddAgentModal({
         </div>
 
         {/* Scrollable form */}
-        <div className="min-h-0 flex-1 space-y-5 overflow-y-auto px-5 py-4">
+        <div className="min-h-0 flex-1 space-y-2 overflow-y-auto px-4 py-4">
           {/* Step 1 — Identity */}
-          <div className="space-y-3">
+          <div className="space-y-2">
             <p className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground/70">
               1. Identity
             </p>
@@ -1709,7 +1709,7 @@ function AddAgentModal({
           </div>
 
           {/* Step 2 — Model */}
-          <div className="space-y-3">
+          <div className="space-y-2">
             <p className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground/70">
               2. Model
             </p>
@@ -1734,7 +1734,7 @@ function AddAgentModal({
           </div>
 
           {/* Step 3 — Channels */}
-          <div className="space-y-3">
+          <div className="space-y-2">
             <p className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground/70">
               3. Channel bindings
             </p>
@@ -1754,7 +1754,7 @@ function AddAgentModal({
           </div>
 
           {/* Step 4 — Advanced */}
-          <div className="space-y-3">
+          <div className="space-y-2">
             <button
               type="button"
               onClick={() => setShowAdvanced(!showAdvanced)}
@@ -1764,7 +1764,7 @@ function AddAgentModal({
               4. Advanced options
             </button>
             {showAdvanced && (
-              <div className="space-y-4 rounded-lg border border-foreground/10 bg-foreground/[0.02] p-3">
+              <div className="space-y-2 rounded-lg border border-foreground/10 bg-foreground/[0.02] p-3">
                 <div>
                   <label className="mb-1 block text-xs font-medium text-muted-foreground/70">
                     Custom workspace path
@@ -1869,7 +1869,7 @@ function AddAgentModal({
         </div>
 
         {/* Footer */}
-        <div className="flex shrink-0 items-center justify-end gap-2 border-t border-foreground/10 px-5 py-3">
+        <div className="flex shrink-0 items-center justify-end gap-2 border-t border-foreground/10 px-4 py-3">
           <button
             type="button"
             onClick={onClose}
@@ -2255,7 +2255,7 @@ function EditAgentModal({
   const mutating = busy || deleting;
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 sm:p-6">
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 sm:p-4">
       <div
         className="absolute inset-0 bg-black/60 backdrop-blur-sm animate-backdrop-in"
         onClick={() => {
@@ -2263,12 +2263,12 @@ function EditAgentModal({
         }}
       />
 
-      <div className="relative z-10 flex h-full max-h-[calc(100vh-2rem)] w-full max-w-xl flex-col overflow-hidden rounded-2xl glass-strong animate-modal-in">
+      <div className="relative z-10 flex h-full max-h-[calc(100vh-3rem)] w-full max-w-xl flex-col overflow-hidden rounded-2xl glass-strong animate-modal-in">
         {/* ── Header ── */}
-        <div className="flex shrink-0 items-center justify-between border-b border-foreground/10 px-5 py-4">
-          <div className="flex items-center gap-3">
+        <div className="flex shrink-0 items-center justify-between border-b border-foreground/10 px-4 py-4">
+          <div className="flex items-center gap-2">
             <div
-              className="flex h-9 w-9 items-center justify-center rounded-xl bg-[var(--accent-brand-subtle)] ring-1 ring-[var(--accent-brand-border)] text-sm font-bold shadow"
+              className="flex h-8 w-8 items-center justify-center rounded-xl bg-[var(--accent-brand-subtle)] ring-1 ring-[var(--accent-brand-border)] text-sm font-bold shadow"
             >
               {agent.emoji}
             </div>
@@ -2309,9 +2309,9 @@ function EditAgentModal({
         </div>
 
         {/* ── Scrollable form ── */}
-        <div className="min-h-0 flex-1 space-y-5 overflow-y-auto px-5 py-4">
+        <div className="min-h-0 flex-1 space-y-2 overflow-y-auto px-4 py-4">
           {/* 1. Identity + default */}
-          <div className="space-y-3 rounded-lg border border-foreground/10 bg-foreground/[0.02] p-3">
+          <div className="space-y-2 rounded-lg border border-foreground/10 bg-foreground/[0.02] p-3">
             <div className="flex items-center justify-between gap-2">
               <p className="text-xs font-semibold text-foreground/70">Agent order</p>
               <div className="flex items-center gap-1.5">
@@ -2608,7 +2608,7 @@ function EditAgentModal({
                   — control which skills this agent can use
                 </span>
               </label>
-              <div className="mb-2 flex items-center gap-3">
+              <div className="mb-2 flex items-center gap-2">
                 <label className="flex cursor-pointer items-center gap-1.5 text-xs text-foreground/80">
                   <input
                     type="radio"
@@ -2799,7 +2799,7 @@ function EditAgentModal({
         </div>
 
         {/* ── Footer ── */}
-        <div className="flex shrink-0 items-center justify-end gap-2 border-t border-foreground/10 px-5 py-3">
+        <div className="flex shrink-0 items-center justify-end gap-2 border-t border-foreground/10 px-4 py-3">
           <button
             type="button"
             onClick={onClose}
@@ -3083,14 +3083,14 @@ function WorkspaceFilesModal({
   }, [filteredFiles]);
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 sm:p-6">
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 sm:p-4">
       <div
         className="absolute inset-0 bg-black/60 backdrop-blur-sm animate-backdrop-in"
         onClick={onClose}
       />
 
-      <div className="relative z-10 flex max-h-[calc(100vh-2rem)] w-full max-w-3xl flex-col overflow-hidden rounded-2xl glass-strong animate-modal-in">
-        <div className="flex shrink-0 items-center justify-between border-b border-foreground/10 px-5 py-4">
+      <div className="relative z-10 flex max-h-[calc(100vh-3rem)] w-full max-w-3xl flex-col overflow-hidden rounded-2xl glass-strong animate-modal-in">
+        <div className="flex shrink-0 items-center justify-between border-b border-foreground/10 px-4 py-4">
           <div className="min-w-0">
             <div className="flex items-center gap-2">
               <FolderOpen className="h-4 w-4 text-amber-400" />
@@ -3111,7 +3111,7 @@ function WorkspaceFilesModal({
           </button>
         </div>
 
-        <div className="shrink-0 space-y-3 border-b border-foreground/10 px-5 py-3">
+        <div className="shrink-0 space-y-2 border-b border-foreground/10 px-4 py-3">
           <div className="flex items-center gap-2 rounded-lg border border-foreground/10 bg-foreground/5 px-3 py-2 text-sm text-muted-foreground">
             <Search className="h-3.5 w-3.5 shrink-0 text-muted-foreground/60" />
             <input
@@ -3132,7 +3132,7 @@ function WorkspaceFilesModal({
           </p>
         </div>
 
-        <div className="min-h-0 flex-1 overflow-y-auto px-5 py-3">
+        <div className="min-h-0 flex-1 overflow-y-auto px-4 py-3">
           {loading ? (
             <div className="flex items-center gap-2 text-xs text-muted-foreground/70">
               <span className="inline-flex items-center gap-0.5">
@@ -3151,7 +3151,7 @@ function WorkspaceFilesModal({
               No files match this filter.
             </p>
           ) : (
-            <div className="space-y-3">
+            <div className="space-y-2">
               {categorizedFiles.map((group) => (
                 <section key={group.key} className="space-y-1.5">
                   <div className="sticky top-0 z-[1] rounded-lg border border-foreground/10 bg-card/95 px-2.5 py-1.5 backdrop-blur-sm">
@@ -3193,7 +3193,7 @@ function WorkspaceFilesModal({
           )}
         </div>
 
-        <div className="flex shrink-0 items-center justify-end gap-2 border-t border-foreground/10 px-5 py-3">
+        <div className="flex shrink-0 items-center justify-end gap-2 border-t border-foreground/10 px-4 py-3">
           <button
             type="button"
             onClick={onClose}
@@ -3233,7 +3233,7 @@ function SummaryBar({ agents }: { agents: Agent[] }) {
   ];
 
   return (
-    <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+    <div className="grid gap-2 sm:grid-cols-2 xl:grid-cols-4">
       {items.map((item) => (
         <div
           key={item.label}
@@ -3261,7 +3261,7 @@ function GridView({
   onSelect: (id: string) => void;
 }) {
   return (
-    <div className="grid gap-3 lg:grid-cols-2 2xl:grid-cols-3">
+    <div className="grid gap-2 lg:grid-cols-2 2xl:grid-cols-3">
       {agents.map((agent) => {
         const selected = agent.id === selectedId;
         return (
@@ -3276,7 +3276,7 @@ function GridView({
                 : "border-foreground/10 bg-foreground/5 hover:bg-foreground/10"
             )}
           >
-            <div className="flex items-start justify-between gap-3">
+            <div className="flex items-start justify-between gap-2">
               <div className="min-w-0">
                 <div className="flex items-center gap-2">
                   <span className="text-base">{agent.emoji}</span>
@@ -3330,7 +3330,7 @@ function AgentDetail({
 }) {
   return (
     <div className="rounded-2xl border border-foreground/10 bg-foreground/5 p-4">
-      <div className="flex items-start justify-between gap-3">
+      <div className="flex items-start justify-between gap-2">
         <div className="min-w-0">
           <div className="flex items-center gap-2">
             <span className="text-lg">{agent.emoji}</span>
@@ -3352,7 +3352,7 @@ function AgentDetail({
         </button>
       </div>
 
-      <div className="mt-4 grid gap-3 md:grid-cols-2">
+      <div className="mt-4 grid gap-2 md:grid-cols-2">
         <div className="rounded-xl bg-black/10 px-3 py-2">
           <p className="text-[11px] uppercase tracking-wide text-muted-foreground/60">
             Model
@@ -3620,7 +3620,7 @@ export function AgentsView() {
 
   if (error || !data) {
     return (
-      <div className="flex flex-1 flex-col items-center justify-center gap-3 text-muted-foreground">
+      <div className="flex flex-1 flex-col items-center justify-center gap-2 text-muted-foreground">
         <AlertCircle className="h-8 w-8 text-red-400" />
         <p className="text-sm">Failed to load agents</p>
         <p className="text-xs text-muted-foreground/60">{error}</p>
@@ -3643,15 +3643,15 @@ export function AgentsView() {
       >
         <div className="pointer-events-none absolute inset-0">
           <div className="absolute inset-0" style={{ background: "var(--agents-page-bg)" }} />
-          <div className="absolute left-[6%] top-16 h-72 w-72 rounded-full blur-3xl" style={{ background: "var(--agents-orb-a)" }} />
-          <div className="absolute right-[8%] top-20 h-80 w-80 rounded-full blur-3xl" style={{ background: "var(--agents-orb-b)" }} />
-          <div className="absolute bottom-[-8rem] left-[28%] h-72 w-72 rounded-full blur-3xl" style={{ background: "var(--agents-orb-c)" }} />
+          <div className="absolute left-[6%] top-16 h-56 w-56 rounded-full blur-3xl" style={{ background: "var(--agents-orb-a)" }} />
+          <div className="absolute right-[8%] top-20 h-64 w-64 rounded-full blur-3xl" style={{ background: "var(--agents-orb-b)" }} />
+          <div className="absolute bottom-[-8rem] left-[28%] h-56 w-56 rounded-full blur-3xl" style={{ background: "var(--agents-orb-c)" }} />
         </div>
       <SectionHeader
         title={
-          <span className="flex items-center gap-3">
-            <span className="flex h-9 w-9 items-center justify-center rounded-lg bg-[var(--accent-brand-subtle)]">
-              <Users className="h-5 w-5 text-[var(--accent-brand-text)]" />
+          <span className="flex items-center gap-2">
+            <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-[var(--accent-brand-subtle)]">
+              <Users className="h-4 w-4 text-[var(--accent-brand-text)]" />
             </span>
             Agents
           </span>
@@ -3725,7 +3725,7 @@ export function AgentsView() {
 
       {/* Grid view + detail: scrollable with max-width */}
       {tab === "agents" && view === "grid" && (
-        <SectionBody width="content" padding="roomy" innerClassName="space-y-5">
+        <SectionBody width="content" padding="roomy" innerClassName="space-y-2">
           <SummaryBar agents={data.agents} />
           <GridView
             agents={data.agents}

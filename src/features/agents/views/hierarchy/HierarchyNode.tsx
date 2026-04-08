@@ -41,7 +41,7 @@ export const HierarchyNode = forwardRef<HTMLButtonElement, HierarchyNodeProps>(f
       )}
       style={{ color: "var(--agents-ink)" }}
     >
-      <div className="flex items-start justify-between gap-3">
+      <div className="flex items-start justify-between gap-2">
         <div
           className="flex h-11 w-11 items-center justify-center rounded-2xl text-lg"
           style={{

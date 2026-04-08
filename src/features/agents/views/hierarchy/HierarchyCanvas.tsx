@@ -35,7 +35,7 @@ export function HierarchyCanvas({
 
   useEffect(() => {
     if (!layout.mainAgent) return;
-    setHighlightMain(true);
+    requestAnimationFrame(() => setHighlightMain(true));
     if (mainRef.current) {
       mainRef.current.scrollIntoView({ behavior: "smooth", block: "center", inline: "center" });
     }
@@ -61,7 +61,7 @@ export function HierarchyCanvas({
       </div>
       <div className="relative z-10 flex h-full flex-col">
         <div
-          className="flex flex-wrap items-center gap-4 border-b px-6 py-4"
+          className="flex flex-wrap items-center gap-2 border-b px-4 py-4"
           style={{
             borderColor: "var(--agents-panel-border)",
             background: "color-mix(in srgb, var(--agents-panel-bg) 82%, transparent)",
@@ -119,7 +119,7 @@ export function HierarchyCanvas({
           </div>
         </div>
 
-        <div className="flex-1 overflow-auto px-6 pb-10 pt-6">
+        <div className="flex-1 overflow-auto px-4 pb-10 pt-6">
           {layout.mainAgent && (
             <div className="mx-auto max-w-xl">
               <HierarchyNode
@@ -133,7 +133,7 @@ export function HierarchyCanvas({
             </div>
           )}
 
-          <div className="mt-8 grid gap-6 lg:grid-cols-2 xl:grid-cols-3" style={{ gridAutoRows: "1fr" }}>
+          <div className="mt-8 grid gap-2 lg:grid-cols-2 xl:grid-cols-3" style={{ gridAutoRows: "1fr" }}>
             {[...groups, ...orphanGroups].map((group) => (
               <section
                 key={group.id}
@@ -141,7 +141,7 @@ export function HierarchyCanvas({
                 style={{ borderColor: "var(--agents-panel-border)", background: "color-mix(in srgb, var(--agents-panel-bg) 92%, transparent)" }}
               >
                 <div
-                  className="flex items-center justify-between border-b px-5 py-3"
+                  className="flex items-center justify-between border-b px-4 py-3"
                   style={{ borderColor: "var(--agents-panel-border)" }}
                 >
                   <div>
@@ -156,7 +156,7 @@ export function HierarchyCanvas({
                     Pole
                   </div>
                 </div>
-                <div className="flex-1 space-y-3 px-5 py-4">
+                <div className="flex-1 space-y-2 px-4 py-4">
                   {group.agents.map((agent) => (
                     <HierarchyNode
                       key={agent.id}
@@ -175,10 +175,10 @@ export function HierarchyCanvas({
             ))}
             {groups.length === 0 && layout.orphanAgents.length === 0 && (
               <div
-                className="rounded-[28px] border px-6 py-10 text-center text-sm"
+                className="rounded-[28px] border px-4 py-10 text-center text-sm"
                 style={{ borderColor: "var(--agents-panel-border)", color: "var(--agents-ink-soft)" }}
               >
-                Aucun agent ne correspond a ce filtre. Ajuste les filtres pour revoir l'ensemble du graphe.
+                Aucun agent ne correspond a ce filtre. Ajuste les filtres pour revoir l&rsquo;ensemble du graphe.
               </div>
             )}
           </div>
