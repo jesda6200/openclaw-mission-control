@@ -1,0 +1,23 @@
+[Unit]
+Description=OpenClaw Mission Control (Production)
+After=network.target
+
+[Service]
+Type=simple
+WorkingDirectory=/home/damien/.openclaw/workspace/openclaw-mission-control
+Environment=NODE_ENV=production
+Environment=PORT=3000
+Environment=HOST=127.0.0.1
+Environment=NEXT_TELEMETRY_DISABLED=1
+ExecStart=/usr/bin/env bash -lc 'cd /home/damien/.openclaw/workspace/openclaw-mission-control && exec npm run start -- -H 127.0.0.1 -p 3000'
+Restart=always
+RestartSec=3
+StartLimitIntervalSec=60
+StartLimitBurst=10
+StandardOutput=journal
+StandardError=journal
+NoNewPrivileges=true
+PrivateTmp=true
+
+[Install]
+WantedBy=default.target

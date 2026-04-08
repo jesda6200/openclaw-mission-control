@@ -1,25 +1,8 @@
 "use client";
 
-import { useEffect, useState, useCallback, useMemo, useRef } from "react";
+import { useEffect, useState, useCallback, useMemo, useRef, type CSSProperties } from "react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
-import {
-  ReactFlow,
-  ReactFlowProvider,
-  Background,
-  Controls,
-  useNodesState,
-  useEdgesState,
-  useReactFlow,
-  MarkerType,
-  Handle,
-  Position,
-  type Node,
-  type Edge,
-  type NodeProps,
-} from "@xyflow/react";
-import "@xyflow/react/dist/style.css";
-import dagre from "dagre";
 import {
   Bot,
   MessageSquare,
@@ -36,9 +19,7 @@ import {
   Copy,
   CheckCircle,
   AlertCircle,
-  Hash,
   Layers,
-  ArrowRight,
   Network,
   LayoutGrid,
   GitFork,
@@ -52,7 +33,6 @@ import {
   ExternalLink,
   Eye,
   EyeOff,
-  RotateCcw,
   Terminal,
   Wrench,
 } from "lucide-react";
@@ -62,9 +42,220 @@ import { SectionBody, SectionHeader, SectionLayout } from "@/components/section-
 import { InlineSpinner, LoadingState } from "@/components/ui/loading-state";
 import { SubagentsManagerView } from "@/components/subagents-manager-view";
 import { ModelsView } from "@/components/models-view";
+import { HierarchyView } from "@/features/agents/views/hierarchy";
 
 const POSITIONS_STORAGE_KEY = "mc-agents-node-positions";
 const AGENT_ORDER_STORAGE_KEY = "mc-agents-order";
+const AGENTS_STYLE_STORAGE_KEY = "mc-agents-style-preset";
+
+type AgentsStyleId = "operator" | "blueprint" | "ember";
+
+type AgentsStylePreset = {
+  id: AgentsStyleId;
+  label: string;
+  eyebrow: string;
+  description: string;
+  preview: string[];
+  variables: CSSProperties;
+};
+
+const AGENTS_STYLE_PRESETS: AgentsStylePreset[] = [
+  {
+    id: "operator",
+    label: "Operator Grid",
+    eyebrow: "Graphite + Emerald",
+    description: "Dark tactical console for dense graphs and busy crews.",
+    preview: ["#34d399", "#7dd3fc", "#fbbf24"],
+    variables: {
+      "--agents-page-bg": "#071016",
+      "--agents-hero-gradient": "linear-gradient(135deg, rgba(11,26,33,0.98) 0%, rgba(7,16,22,0.98) 58%, rgba(5,11,16,0.96) 100%)",
+      "--agents-orb-a": "rgba(52,211,153,0.22)",
+      "--agents-orb-b": "rgba(125,211,252,0.18)",
+      "--agents-orb-c": "rgba(251,191,36,0.12)",
+      "--agents-panel-bg": "rgba(6,17,23,0.74)",
+      "--agents-panel-strong": "rgba(8,19,27,0.94)",
+      "--agents-panel-border": "rgba(110,231,183,0.16)",
+      "--agents-panel-highlight": "rgba(255,255,255,0.05)",
+      "--agents-panel-shadow": "rgba(1,8,13,0.48)",
+      "--agents-ink": "#ecfdf5",
+      "--agents-ink-muted": "rgba(220,252,231,0.74)",
+      "--agents-ink-soft": "rgba(220,252,231,0.46)",
+      "--agents-accent": "#34d399",
+      "--agents-accent-strong": "#10b981",
+      "--agents-accent-soft": "rgba(52,211,153,0.14)",
+      "--agents-accent-border": "rgba(52,211,153,0.30)",
+      "--agents-accent-text": "#a7f3d0",
+      "--agents-accent-contrast": "#03120d",
+      "--agents-chip-bg": "rgba(255,255,255,0.04)",
+      "--agents-chip-border": "rgba(255,255,255,0.08)",
+      "--agents-chip-text": "rgba(236,253,245,0.72)",
+      "--agents-flow-bg": "linear-gradient(180deg, rgba(5,10,14,0.98) 0%, rgba(4,8,12,0.96) 100%)",
+      "--agents-flow-grid": "rgba(148,163,184,0.12)",
+      "--agents-gateway-bg": "radial-gradient(circle at 28% 30%, rgba(52,211,153,0.38), rgba(3,18,14,0.96) 72%)",
+      "--agents-gateway-border": "rgba(110,231,183,0.46)",
+      "--agents-gateway-glow": "rgba(52,211,153,0.24)",
+      "--agents-agent-bg": "linear-gradient(180deg, rgba(12,25,35,0.96), rgba(8,17,25,0.98))",
+      "--agents-agent-border": "rgba(125,211,252,0.14)",
+      "--agents-agent-selected-bg": "linear-gradient(180deg, rgba(9,36,39,0.98), rgba(6,20,22,1))",
+      "--agents-agent-selected-border": "rgba(94,234,212,0.54)",
+      "--agents-card-shadow": "rgba(0,0,0,0.26)",
+      "--agents-card-selected-shadow": "rgba(16,185,129,0.22)",
+      "--agents-runtime-bg": "linear-gradient(180deg, rgba(9,29,27,0.92), rgba(7,19,18,0.98))",
+      "--agents-runtime-border": "rgba(52,211,153,0.24)",
+      "--agents-channel-bg": "linear-gradient(180deg, rgba(7,35,46,0.92), rgba(7,22,33,0.98))",
+      "--agents-channel-border": "rgba(56,189,248,0.24)",
+      "--agents-channel-text": "#bae6fd",
+      "--agents-workspace-bg": "linear-gradient(180deg, rgba(44,30,14,0.92), rgba(27,18,10,0.98))",
+      "--agents-workspace-border": "rgba(251,191,36,0.26)",
+      "--agents-workspace-text": "#fde68a",
+      "--agents-edge-delegation": "#5eead4",
+      "--agents-edge-route": "#7dd3fc",
+      "--agents-edge-workspace": "#fbbf24",
+      "--agents-edge-muted": "rgba(148,163,184,0.34)",
+      "--agents-edge-label": "rgba(236,253,245,0.82)",
+      "--agents-edge-muted-soft": "rgba(148,163,184,0.66)",
+    } as CSSProperties,
+  },
+  {
+    id: "blueprint",
+    label: "Blueprint Ice",
+    eyebrow: "Navy + Azure",
+    description: "Cold, technical, architecture-first viewing mode.",
+    preview: ["#7dd3fc", "#38bdf8", "#c4b5fd"],
+    variables: {
+      "--agents-page-bg": "#08111f",
+      "--agents-hero-gradient": "linear-gradient(135deg, rgba(15,29,55,0.98) 0%, rgba(8,17,31,0.98) 56%, rgba(9,13,28,0.96) 100%)",
+      "--agents-orb-a": "rgba(56,189,248,0.24)",
+      "--agents-orb-b": "rgba(196,181,253,0.14)",
+      "--agents-orb-c": "rgba(34,211,238,0.16)",
+      "--agents-panel-bg": "rgba(9,17,32,0.78)",
+      "--agents-panel-strong": "rgba(11,19,36,0.94)",
+      "--agents-panel-border": "rgba(125,211,252,0.18)",
+      "--agents-panel-highlight": "rgba(255,255,255,0.05)",
+      "--agents-panel-shadow": "rgba(3,7,17,0.46)",
+      "--agents-ink": "#e0f2fe",
+      "--agents-ink-muted": "rgba(224,242,254,0.74)",
+      "--agents-ink-soft": "rgba(224,242,254,0.46)",
+      "--agents-accent": "#38bdf8",
+      "--agents-accent-strong": "#0ea5e9",
+      "--agents-accent-soft": "rgba(56,189,248,0.14)",
+      "--agents-accent-border": "rgba(56,189,248,0.32)",
+      "--agents-accent-text": "#bae6fd",
+      "--agents-accent-contrast": "#07111d",
+      "--agents-chip-bg": "rgba(255,255,255,0.04)",
+      "--agents-chip-border": "rgba(255,255,255,0.08)",
+      "--agents-chip-text": "rgba(224,242,254,0.72)",
+      "--agents-flow-bg": "linear-gradient(180deg, rgba(5,12,24,0.98) 0%, rgba(4,9,18,0.96) 100%)",
+      "--agents-flow-grid": "rgba(125,211,252,0.11)",
+      "--agents-gateway-bg": "radial-gradient(circle at 28% 30%, rgba(56,189,248,0.36), rgba(9,18,41,0.96) 72%)",
+      "--agents-gateway-border": "rgba(125,211,252,0.42)",
+      "--agents-gateway-glow": "rgba(56,189,248,0.22)",
+      "--agents-agent-bg": "linear-gradient(180deg, rgba(15,25,46,0.96), rgba(9,17,34,0.98))",
+      "--agents-agent-border": "rgba(125,211,252,0.16)",
+      "--agents-agent-selected-bg": "linear-gradient(180deg, rgba(12,33,54,0.98), rgba(8,21,37,1))",
+      "--agents-agent-selected-border": "rgba(125,211,252,0.54)",
+      "--agents-card-shadow": "rgba(0,0,0,0.24)",
+      "--agents-card-selected-shadow": "rgba(14,165,233,0.24)",
+      "--agents-runtime-bg": "linear-gradient(180deg, rgba(17,32,54,0.92), rgba(11,21,38,0.98))",
+      "--agents-runtime-border": "rgba(125,211,252,0.24)",
+      "--agents-channel-bg": "linear-gradient(180deg, rgba(8,41,57,0.92), rgba(7,24,36,0.98))",
+      "--agents-channel-border": "rgba(34,211,238,0.28)",
+      "--agents-channel-text": "#cffafe",
+      "--agents-workspace-bg": "linear-gradient(180deg, rgba(23,32,57,0.92), rgba(15,21,36,0.98))",
+      "--agents-workspace-border": "rgba(196,181,253,0.28)",
+      "--agents-workspace-text": "#ddd6fe",
+      "--agents-edge-delegation": "#93c5fd",
+      "--agents-edge-route": "#38bdf8",
+      "--agents-edge-workspace": "#c4b5fd",
+      "--agents-edge-muted": "rgba(148,163,184,0.34)",
+      "--agents-edge-label": "rgba(224,242,254,0.82)",
+      "--agents-edge-muted-soft": "rgba(148,163,184,0.66)",
+    } as CSSProperties,
+  },
+  {
+    id: "ember",
+    label: "Ember Relay",
+    eyebrow: "Copper + Amber",
+    description: "Warmer, sharper and more theatrical for a cinematic deck.",
+    preview: ["#fb923c", "#f59e0b", "#fda4af"],
+    variables: {
+      "--agents-page-bg": "#140d09",
+      "--agents-hero-gradient": "linear-gradient(135deg, rgba(38,20,12,0.98) 0%, rgba(20,13,9,0.98) 56%, rgba(15,9,7,0.96) 100%)",
+      "--agents-orb-a": "rgba(251,146,60,0.20)",
+      "--agents-orb-b": "rgba(244,114,182,0.12)",
+      "--agents-orb-c": "rgba(245,158,11,0.18)",
+      "--agents-panel-bg": "rgba(24,14,10,0.78)",
+      "--agents-panel-strong": "rgba(31,17,12,0.94)",
+      "--agents-panel-border": "rgba(251,146,60,0.18)",
+      "--agents-panel-highlight": "rgba(255,255,255,0.04)",
+      "--agents-panel-shadow": "rgba(8,4,3,0.5)",
+      "--agents-ink": "#ffedd5",
+      "--agents-ink-muted": "rgba(255,237,213,0.74)",
+      "--agents-ink-soft": "rgba(255,237,213,0.46)",
+      "--agents-accent": "#fb923c",
+      "--agents-accent-strong": "#f97316",
+      "--agents-accent-soft": "rgba(251,146,60,0.14)",
+      "--agents-accent-border": "rgba(251,146,60,0.32)",
+      "--agents-accent-text": "#fdba74",
+      "--agents-accent-contrast": "#160c07",
+      "--agents-chip-bg": "rgba(255,255,255,0.04)",
+      "--agents-chip-border": "rgba(255,255,255,0.08)",
+      "--agents-chip-text": "rgba(255,237,213,0.72)",
+      "--agents-flow-bg": "linear-gradient(180deg, rgba(18,10,7,0.98) 0%, rgba(12,7,5,0.96) 100%)",
+      "--agents-flow-grid": "rgba(251,191,36,0.10)",
+      "--agents-gateway-bg": "radial-gradient(circle at 28% 30%, rgba(251,146,60,0.34), rgba(34,16,8,0.96) 72%)",
+      "--agents-gateway-border": "rgba(251,146,60,0.42)",
+      "--agents-gateway-glow": "rgba(249,115,22,0.20)",
+      "--agents-agent-bg": "linear-gradient(180deg, rgba(33,19,12,0.96), rgba(20,12,9,0.98))",
+      "--agents-agent-border": "rgba(251,146,60,0.15)",
+      "--agents-agent-selected-bg": "linear-gradient(180deg, rgba(48,26,12,0.98), rgba(27,15,8,1))",
+      "--agents-agent-selected-border": "rgba(251,191,36,0.52)",
+      "--agents-card-shadow": "rgba(0,0,0,0.26)",
+      "--agents-card-selected-shadow": "rgba(249,115,22,0.24)",
+      "--agents-runtime-bg": "linear-gradient(180deg, rgba(35,22,13,0.92), rgba(22,14,10,0.98))",
+      "--agents-runtime-border": "rgba(249,115,22,0.24)",
+      "--agents-channel-bg": "linear-gradient(180deg, rgba(51,25,15,0.92), rgba(31,16,11,0.98))",
+      "--agents-channel-border": "rgba(251,146,60,0.28)",
+      "--agents-channel-text": "#fdba74",
+      "--agents-workspace-bg": "linear-gradient(180deg, rgba(53,34,10,0.92), rgba(31,20,8,0.98))",
+      "--agents-workspace-border": "rgba(245,158,11,0.26)",
+      "--agents-workspace-text": "#fcd34d",
+      "--agents-edge-delegation": "#fb923c",
+      "--agents-edge-route": "#fda4af",
+      "--agents-edge-workspace": "#fbbf24",
+      "--agents-edge-muted": "rgba(168,162,158,0.34)",
+      "--agents-edge-label": "rgba(255,237,213,0.82)",
+      "--agents-edge-muted-soft": "rgba(168,162,158,0.62)",
+    } as CSSProperties,
+  },
+];
+
+const DEFAULT_AGENTS_STYLE: AgentsStyleId = "operator";
+
+function loadSavedAgentsStyle(): AgentsStyleId {
+  if (typeof window === "undefined") return DEFAULT_AGENTS_STYLE;
+  try {
+    const raw = localStorage.getItem(AGENTS_STYLE_STORAGE_KEY);
+    return AGENTS_STYLE_PRESETS.some((preset) => preset.id === raw)
+      ? (raw as AgentsStyleId)
+      : DEFAULT_AGENTS_STYLE;
+  } catch {
+    return DEFAULT_AGENTS_STYLE;
+  }
+}
+
+function saveAgentsStyle(id: AgentsStyleId) {
+  if (typeof window === "undefined") return;
+  try {
+    localStorage.setItem(AGENTS_STYLE_STORAGE_KEY, id);
+  } catch {
+    // ignore localStorage errors
+  }
+}
+
+function getAgentsStylePreset(id: AgentsStyleId): AgentsStylePreset {
+  return AGENTS_STYLE_PRESETS.find((preset) => preset.id === id) || AGENTS_STYLE_PRESETS[0];
+}
 
 function loadSavedPositions(): Record<string, { x: number; y: number }> {
   if (typeof window === "undefined") return {};
@@ -191,7 +382,18 @@ const MISSION_CONTROL_GROUPS: AgentGroup[] = [
   { id: "ops", label: "OPS", agents: ["devops-engineer", "automation-engineer", "security-engineer"] },
   { id: "control", label: "CONTROL", agents: ["qa-engineer", "validator", "feedback-loop"] },
   { id: "expertise", label: "EXPERTISE", agents: ["research-agent", "product-manager", "crypto-analyst"] },
+  { id: "autres", label: "AUTRES", agents: ["ai-engineer", "ui-designer", "memory-manager"] },
 ];
+
+const MISSION_CONTROL_GROUP_ORDER = [
+  "intelligence",
+  "archi",
+  "production",
+  "ops",
+  "control",
+  "expertise",
+  "autres",
+] as const;
 
 const MISSION_CONTROL_MAIN_AGENT_ID = "main";
 
@@ -250,1359 +452,14 @@ const STATUS_COLORS: Record<string, { dot: string; text: string }> = {
 
 
 const AGENT_GRAPH_COLORS = {
-  delegation: "var(--chart-2)",
-  delegationLabel: "var(--chart-2)",
-  route: "rgba(148,163,184,0.38)",
-  routeLabel: "rgba(148,163,184,0.82)",
-  workspace: "rgba(120,113,108,0.28)",
-  muted: "var(--chart-muted)",
-  mutedSoft: "var(--chart-tick-muted)",
+  delegation: "var(--agents-edge-delegation)",
+  delegationLabel: "var(--agents-edge-label)",
+  route: "var(--agents-edge-route)",
+  routeLabel: "var(--agents-edge-label)",
+  workspace: "var(--agents-edge-workspace)",
+  muted: "var(--agents-edge-muted)",
+  mutedSoft: "var(--agents-edge-muted-soft)",
 };
-
-/* ================================================================
-   Custom Nodes
-   ================================================================ */
-
-function GatewayNode({ data }: NodeProps) {
-  const d = data as { agentCount: number; owner: string };
-  return (
-    <div className="flex flex-col items-center">
-      <Handle type="target" position={Position.Left} className="!bg-transparent !border-0 !w-0 !h-0" />
-      <Handle type="source" position={Position.Right} className="!bg-transparent !border-0 !w-0 !h-0" />
-      <Handle type="source" position={Position.Bottom} id="sub" className="!bg-transparent !border-0 !w-0 !h-0" />
-      <div className="flex h-20 w-20 items-center justify-center rounded-full border-2 border-[var(--accent-brand-border)] bg-[var(--accent-brand-subtle)] shadow-lg shadow-[var(--accent-brand-ring)]">
-        <span className="text-xl">🦞</span>
-      </div>
-      <div className="mt-2 text-center">
-        <p className="text-xs font-bold text-foreground">Gateway</p>
-        <p className="text-xs text-muted-foreground">
-          {d.agentCount} agent{d.agentCount !== 1 ? "s" : ""}
-          {d.owner ? ` · ${d.owner}` : ""}
-        </p>
-      </div>
-    </div>
-  );
-}
-
-function AgentNodeComponent({ data }: NodeProps) {
-  const d = data as {
-    agent: Agent;
-    idx: number;
-    selected: boolean;
-    onClick: () => void;
-  };
-  const { agent, idx, selected } = d;
-  const sc = STATUS_COLORS[agent.status] || STATUS_COLORS.unknown;
-
-  return (
-    <div
-      onClick={() => d.onClick()}
-      className={cn(
-        "cursor-pointer rounded-xl border p-3 transition-all min-w-44 max-w-52",
-        selected
-          ? "border-[var(--accent-brand-border)] bg-[var(--accent-brand-subtle)] shadow-lg shadow-[var(--accent-brand-ring)]"
-          : "border-foreground/10 bg-card hover:border-[var(--accent-brand-border)]"
-      )}
-    >
-      <Handle type="target" position={Position.Left} className="!bg-primary !border-primary !w-2 !h-2" />
-      <Handle type="source" position={Position.Right} className="!bg-blue-500 !border-blue-400 !w-2 !h-2" />
-      <Handle type="source" position={Position.Right} id="sub" className="!bg-[var(--accent-brand)] !border-[var(--accent-brand)] !w-2 !h-2" />
-      <Handle type="target" position={Position.Left} id="parent" className="!bg-[var(--accent-brand)] !border-[var(--accent-brand)] !w-2 !h-2" />
-
-      {/* Header */}
-      <div className="flex items-center gap-2">
-        <div
-          className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-[var(--accent-brand-subtle)] ring-1 ring-[var(--accent-brand-border)] text-sm font-bold"
-        >
-          {agent.emoji}
-        </div>
-        <div className="min-w-0 flex-1">
-          <div className="flex items-center gap-1.5">
-            <span className="truncate text-xs font-semibold text-foreground">
-              {agent.name}
-            </span>
-            <span className={cn("h-2 w-2 rounded-full", sc.dot)} />
-          </div>
-          <p className="truncate text-xs text-muted-foreground">
-            {shortModel(agent.model)}
-          </p>
-        </div>
-      </div>
-
-      {/* Badges */}
-      <div className="mt-2 flex flex-wrap items-center gap-1.5 text-xs">
-        {agent.isDefault && (
-          <span className="rounded bg-[var(--accent-brand-subtle)] px-1.5 py-0.5 text-[var(--accent-brand-text)] font-medium">
-            ◇ Default
-          </span>
-        )}
-        {agent.channels.map((ch) => (
-          <span key={ch} className="flex items-center gap-1 rounded bg-sky-500/10 px-1.5 py-0.5 text-sky-300">
-            {channelIcon(ch)} {ch}
-          </span>
-        ))}
-      </div>
-
-      {/* Stats row */}
-      <div className="mt-2 flex items-center gap-3 border-t border-foreground/5 pt-2 text-xs">
-        <span className="text-muted-foreground">Sessions <strong className="text-foreground/70">{agent.sessionCount}</strong></span>
-        <span className="text-muted-foreground">Tokens <strong className="text-foreground/70">{formatTokens(agent.totalTokens)}</strong></span>
-        <span className={cn("ml-auto font-medium", sc.text)}>
-          {formatAgo(agent.lastActive)}
-        </span>
-      </div>
-    </div>
-  );
-}
-
-function RuntimeSubagentNodeComponent({ data }: NodeProps) {
-  const d = data as {
-    parentAgentId: string;
-    shortId: string;
-    model: string;
-    status: "running" | "recent";
-    totalTokens: number;
-    lastActive: number;
-  };
-
-  return (
-    <div
-      className={cn(
-        "rounded-lg border px-3 py-2 min-w-40",
-        d.status === "running"
-          ? "border-[var(--accent-brand-border)] bg-[var(--accent-brand-subtle)]"
-          : "border-zinc-500/30 bg-zinc-900/40"
-      )}
-    >
-      <Handle
-        type="target"
-        position={Position.Left}
-        className={cn(
-          "!w-2 !h-2",
-          d.status === "running"
-            ? "!bg-[var(--accent-brand)] !border-[var(--accent-brand)]"
-            : "!bg-zinc-500 !border-zinc-400"
-        )}
-      />
-      <div className="flex items-center gap-1.5">
-        <Sparkles className={cn("h-3.5 w-3.5", d.status === "running" ? "text-[var(--accent-brand)]" : "text-zinc-300")} />
-        <p className="text-xs font-semibold text-foreground/90">
-          subagent #{d.shortId}
-        </p>
-      </div>
-      <p className="mt-1 truncate text-xs text-muted-foreground">
-        {shortModel(d.model)}
-      </p>
-      <p className="mt-1 text-xs text-muted-foreground">
-        {d.status} · {formatTokens(d.totalTokens)} · {formatAgo(d.lastActive)}
-      </p>
-    </div>
-  );
-}
-
-function ChannelNodeComponent({ data }: NodeProps) {
-  const d = data as { channel: string; accountIds: string[] };
-
-  return (
-    <div className="flex items-center gap-2 rounded-lg border border-sky-500/20 bg-sky-950/50 px-3 py-2 min-w-32">
-      <Handle type="source" position={Position.Right} className="!bg-sky-500 !border-sky-400 !w-2 !h-2" />
-      <span className="text-sm">{channelIcon(d.channel)}</span>
-      <div>
-        <p className="text-xs font-semibold text-sky-200 capitalize">
-          {d.channel}
-        </p>
-        {d.accountIds.length > 0 && (
-          <p className="text-xs text-sky-400/60">
-            {d.accountIds.join(", ")}
-          </p>
-        )}
-      </div>
-    </div>
-  );
-}
-
-function WorkspaceNodeComponent({ data }: NodeProps) {
-  const d = data as {
-    path: string;
-    agentNames: string[];
-    selected?: boolean;
-    onClick?: () => void;
-  };
-
-  return (
-    <div
-      onClick={() => d.onClick?.()}
-      className={cn(
-        "flex items-center gap-2 rounded-lg border px-3 py-2 min-w-32 transition-colors",
-        d.selected
-          ? "border-amber-400/50 bg-amber-900/50 shadow-lg shadow-amber-500/10"
-          : "border-amber-500/20 bg-amber-950/40",
-        d.onClick ? "cursor-pointer hover:border-amber-400/35" : ""
-      )}
-    >
-      <Handle type="target" position={Position.Left} className="!bg-amber-500 !border-amber-400 !w-2 !h-2" />
-      <FolderOpen className="h-4 w-4 text-amber-400 shrink-0" />
-      <div>
-        <p className="text-xs font-semibold text-amber-200">
-          {shortPath(d.path)}
-        </p>
-        <p className="text-xs text-amber-400/60">
-          {d.agentNames.join(", ")}
-        </p>
-      </div>
-    </div>
-  );
-}
-
-function GroupNodeComponent({ data }: NodeProps<Node<{ label: string }>>) {
-  return (
-    <div className="min-w-[180px] rounded-2xl border border-cyan-400/25 bg-cyan-500/10 px-4 py-3 text-center shadow-[0_0_0_1px_rgba(34,211,238,0.08)] backdrop-blur-sm">
-      <div className="text-[10px] font-semibold tracking-[0.2em] text-cyan-200/80">PÔLE</div>
-      <div className="mt-1 text-sm font-bold text-cyan-50">{String(data.label || "GROUP")}</div>
-    </div>
-  );
-}
-
-const nodeTypes = {
-  gateway: GatewayNode,
-  agent: AgentNodeComponent,
-  runtimeSubagent: RuntimeSubagentNodeComponent,
-  channel: ChannelNodeComponent,
-  workspace: WorkspaceNodeComponent,
-  group: GroupNodeComponent,
-};
-
-/* ================================================================
-   Layout computation
-   ================================================================ */
-
-function buildGraph(
-  data: AgentsResponse,
-  selectedId: string | null,
-  onSelectAgent: (id: string) => void,
-  selectedWorkspacePath: string | null,
-  onSelectWorkspace: (workspacePath: string) => void,
-  savedPositions?: Record<string, { x: number; y: number }>
-): { nodes: Node[]; edges: Edge[] } {
-  const nodes: Node[] = [];
-  const edges: Edge[] = [];
-  const agents = data.agents;
-
-  const channelMap = new Map<string, Set<string>>();
-  const workspaceMap = new Map<string, string[]>();
-  const channelRoutes = new Map<string, Array<{ agentId: string; accountId: string | null; raw: string }>>();
-
-  for (const ch of data.configuredChannels || []) {
-    if (ch.enabled && ch.channel) channelMap.set(ch.channel, new Set());
-  }
-
-  for (const a of agents) {
-    for (const b of a.bindings) {
-      const ch = b.split(" ")[0]?.trim();
-      if (!ch) continue;
-      const accMatch = b.match(/accountId=(\S+)/);
-      const accId = accMatch ? accMatch[1] : null;
-      if (!channelMap.has(ch)) channelMap.set(ch, new Set());
-      if (accId) channelMap.get(ch)!.add(accId);
-      if (!channelRoutes.has(ch)) channelRoutes.set(ch, []);
-      channelRoutes.get(ch)!.push({ agentId: a.id, accountId: accId, raw: b });
-    }
-    if (!workspaceMap.has(a.workspace)) workspaceMap.set(a.workspace, []);
-    workspaceMap.get(a.workspace)!.push(a.name);
-  }
-
-  const defaultAgent =
-    agents.find((a) => a.id === MISSION_CONTROL_MAIN_AGENT_ID) ||
-    agents.find((a) => a.isDefault) ||
-    agents[0] ||
-    null;
-
-  const fallbackPositions = new Map<string, { x: number; y: number }>();
-  function getPosition(nodeId: string, fallbackX: number, fallbackY: number) {
-    if (savedPositions && savedPositions[nodeId]) return savedPositions[nodeId];
-    return fallbackPositions.get(nodeId) || { x: fallbackX, y: fallbackY };
-  }
-
-  const GATEWAY_X = -20;
-  const GATEWAY_Y = -10;
-  const CHANNEL_COLUMN_X = -520;
-  const GROUP_START_X = 240;
-  const GROUP_SPACING_X = 340;
-  const GROUP_Y = -10;
-  const AGENT_Y_BASE = 150;
-  const AGENT_Y_STEP = 110;
-  const WORKSPACE_ROW_Y = 700;
-  const WORKSPACE_SPACING_X = 280;
-  const RUNTIME_SUBAGENT_OFFSET_Y = -120;
-  const RUNTIME_SUBAGENT_SPACING_X = 220;
-
-  const gatewayEdgeStyle = { stroke: "var(--border)", strokeWidth: 1.5 };
-  const gatewayEdgeMarker = {
-    type: MarkerType.ArrowClosed,
-    color: "var(--border)",
-    width: 18,
-    height: 14,
-  } as const;
-
-  const gatewayId = "gateway";
-  nodes.push({
-    id: gatewayId,
-    type: "gateway",
-    position: getPosition(gatewayId, GATEWAY_X, GATEWAY_Y),
-    data: { agentCount: agents.length, owner: data.owner || "" },
-    draggable: true,
-  });
-
-  const agentsById = new Map(agents.map((agent) => [agent.id, agent]));
-  const assigned = new Set<string>();
-  const groups = MISSION_CONTROL_GROUPS.map((group) => ({
-    ...group,
-    resolved: group.agents.map((id) => agentsById.get(id)).filter(Boolean) as Agent[],
-  })).filter((group) => group.resolved.length > 0);
-
-  groups.forEach((group) => group.resolved.forEach((agent) => assigned.add(agent.id)));
-
-  const ungrouped = agents.filter(
-    (agent) => agent.id !== MISSION_CONTROL_MAIN_AGENT_ID && !assigned.has(agent.id)
-  );
-  if (ungrouped.length > 0) {
-    groups.push({
-      id: "other",
-      label: "AUTRES",
-      agents: ungrouped.map((agent) => agent.id),
-      resolved: ungrouped,
-    } as AgentGroup & { resolved: Agent[] });
-  }
-
-  const mainAgent = agentsById.get(MISSION_CONTROL_MAIN_AGENT_ID) || defaultAgent;
-  if (mainAgent) {
-    const nodeId = `agent-${mainAgent.id}`;
-    fallbackPositions.set(nodeId, { x: GATEWAY_X + 240, y: 20 });
-    nodes.push({
-      id: nodeId,
-      type: "agent",
-      position: getPosition(nodeId, GATEWAY_X + 240, 20),
-      data: {
-        agent: mainAgent,
-        idx: agents.indexOf(mainAgent),
-        selected: selectedId === mainAgent.id,
-        onClick: () => onSelectAgent(mainAgent.id),
-      },
-      draggable: true,
-    });
-
-    edges.push({
-      id: `gw-${mainAgent.id}`,
-      source: gatewayId,
-      target: nodeId,
-      type: "default",
-      style: { ...gatewayEdgeStyle, strokeWidth: 1.8 },
-      markerEnd: gatewayEdgeMarker,
-    });
-  }
-
-  groups.forEach((group, groupIndex) => {
-    const groupNodeId = `group-${group.id}`;
-    const groupX = GROUP_START_X + groupIndex * GROUP_SPACING_X;
-    fallbackPositions.set(groupNodeId, { x: groupX, y: GROUP_Y });
-    nodes.push({
-      id: groupNodeId,
-      type: "group",
-      position: getPosition(groupNodeId, groupX, GROUP_Y),
-      data: { label: group.label },
-      draggable: true,
-    });
-
-    if (mainAgent) {
-      edges.push({
-        id: `main-group-${group.id}`,
-        source: `agent-${mainAgent.id}`,
-        target: groupNodeId,
-        type: "default",
-        animated: true,
-        style: { stroke: AGENT_GRAPH_COLORS.delegation, strokeWidth: 1.7, strokeDasharray: "6 4" },
-        label: "orchestre",
-        labelStyle: { fill: AGENT_GRAPH_COLORS.delegationLabel, fontSize: 10 },
-        labelBgStyle: { fill: "var(--card)", fillOpacity: 0.9 },
-        markerEnd: {
-          type: MarkerType.ArrowClosed,
-          color: AGENT_GRAPH_COLORS.delegation,
-          width: 14,
-          height: 10,
-        },
-      });
-    }
-
-    group.resolved.forEach((agent, agentIndex) => {
-      const nodeId = `agent-${agent.id}`;
-      const fallbackX = groupX;
-      const fallbackY = AGENT_Y_BASE + agentIndex * AGENT_Y_STEP;
-      fallbackPositions.set(nodeId, { x: fallbackX, y: fallbackY });
-
-      nodes.push({
-        id: nodeId,
-        type: "agent",
-        position: getPosition(nodeId, fallbackX, fallbackY),
-        data: {
-          agent,
-          idx: agents.indexOf(agent),
-          selected: selectedId === agent.id,
-          onClick: () => onSelectAgent(agent.id),
-        },
-        draggable: true,
-      });
-
-      edges.push({
-        id: `group-agent-${group.id}-${agent.id}`,
-        source: groupNodeId,
-        target: nodeId,
-        type: "default",
-        style: { stroke: "rgba(34,211,238,0.45)", strokeWidth: 1.4 },
-        markerEnd: {
-          type: MarkerType.ArrowClosed,
-          color: "rgba(34,211,238,0.7)",
-          width: 13,
-          height: 9,
-        },
-      });
-    });
-  });
-
-  for (const parent of agents) {
-    for (const childId of parent.subagents) {
-      const child = agents.find((a) => a.id === childId);
-      if (!child) continue;
-      edges.push({
-        id: `sub-${parent.id}-${child.id}`,
-        source: `agent-${parent.id}`,
-        target: `agent-${child.id}`,
-        sourceHandle: "sub",
-        targetHandle: "parent",
-        type: "default",
-        animated: true,
-        style: { stroke: AGENT_GRAPH_COLORS.delegation, strokeWidth: 1.5, strokeDasharray: "5 4" },
-        label: "delegates",
-        labelStyle: { fill: AGENT_GRAPH_COLORS.delegationLabel, fontSize: 10 },
-        labelBgStyle: { fill: "var(--card)", fillOpacity: 0.9 },
-        markerEnd: {
-          type: MarkerType.ArrowClosed,
-          color: AGENT_GRAPH_COLORS.delegation,
-          width: 14,
-          height: 10,
-        },
-      });
-    }
-  }
-
-  for (const parent of agents) {
-    const runtimeSubs = (parent.runtimeSubagents || []).filter((s) => s.status === "running").slice(0, 6);
-    if (runtimeSubs.length === 0) continue;
-
-    runtimeSubs.forEach((sub, idx) => {
-      const runtimeNodeId = `runtime-subagent-${sub.sessionKey.replace(/[^a-zA-Z0-9_-]/g, "-")}`;
-      const parentNode = nodes.find((n) => n.id === `agent-${parent.id}`);
-      const fallbackX = (parentNode?.position.x ?? GATEWAY_X) + idx * RUNTIME_SUBAGENT_SPACING_X;
-      const fallbackY = (parentNode?.position.y ?? AGENT_Y_BASE) + RUNTIME_SUBAGENT_OFFSET_Y;
-      fallbackPositions.set(runtimeNodeId, { x: fallbackX, y: fallbackY });
-
-      nodes.push({
-        id: runtimeNodeId,
-        type: "runtimeSubagent",
-        position: getPosition(runtimeNodeId, fallbackX, fallbackY),
-        data: {
-          parentAgentId: parent.id,
-          shortId: sub.shortId,
-          model: sub.model,
-          status: sub.status,
-          totalTokens: sub.totalTokens,
-          lastActive: sub.lastActive,
-        },
-        draggable: true,
-      });
-
-      edges.push({
-        id: `runtime-sub-${parent.id}-${sub.shortId}-${idx}`,
-        source: `agent-${parent.id}`,
-        target: runtimeNodeId,
-        sourceHandle: "sub",
-        type: "default",
-        animated: sub.status === "running",
-        style: {
-          stroke: sub.status === "running" ? AGENT_GRAPH_COLORS.delegation : AGENT_GRAPH_COLORS.muted,
-          strokeWidth: 1.5,
-          strokeDasharray: "5 4",
-        },
-        label: sub.status === "running" ? "runtime" : "recent",
-        labelStyle: {
-          fill: sub.status === "running" ? AGENT_GRAPH_COLORS.delegationLabel : AGENT_GRAPH_COLORS.mutedSoft,
-          fontSize: 10,
-        },
-        labelBgStyle: { fill: "var(--card)", fillOpacity: 0.9 },
-        markerEnd: {
-          type: MarkerType.ArrowClosed,
-          color: sub.status === "running" ? AGENT_GRAPH_COLORS.delegation : AGENT_GRAPH_COLORS.muted,
-          width: 12,
-          height: 9,
-        },
-      });
-    });
-  }
-
-  const channels = Array.from(channelMap.entries())
-    .map(([channel, accountIds]) => [channel, Array.from(accountIds)] as const)
-    .filter(([ch]) => channelRoutes.has(ch));
-  const chFallbackSpacing = 140;
-  channels.forEach(([ch, accountIds], i) => {
-    const nodeId = `ch-${ch}`;
-    const fallbackY = GATEWAY_Y - ((channels.length - 1) * chFallbackSpacing) / 2 + i * chFallbackSpacing;
-    fallbackPositions.set(nodeId, { x: CHANNEL_COLUMN_X, y: fallbackY });
-    nodes.push({
-      id: nodeId,
-      type: "channel",
-      position: getPosition(nodeId, CHANNEL_COLUMN_X, fallbackY),
-      data: { channel: ch, accountIds },
-      draggable: true,
-    });
-
-    const explicitRoutes = channelRoutes.get(ch) || [];
-    const routes = explicitRoutes.length > 0
-      ? explicitRoutes
-      : defaultAgent
-        ? [{ agentId: defaultAgent.id, accountId: null, raw: "implicit-default" }]
-        : [];
-
-    routes.forEach((route, routeIdx) => {
-      const implicitDefault = route.raw === "implicit-default";
-      edges.push({
-        id: `ch-${ch}-${route.agentId}-${route.accountId || "all"}-${i}-${routeIdx}`,
-        source: nodeId,
-        target: `agent-${route.agentId}`,
-        type: "default",
-        style: { stroke: AGENT_GRAPH_COLORS.route, strokeWidth: implicitDefault ? 0.9 : 1.05, strokeDasharray: "3 5" },
-        label: route.accountId ? route.accountId : undefined,
-        labelStyle: { fill: AGENT_GRAPH_COLORS.routeLabel, fontSize: 9, fontWeight: 500 },
-        labelBgStyle: { fill: "var(--card)", fillOpacity: 0.45 },
-        markerEnd: {
-          type: MarkerType.ArrowClosed,
-          color: AGENT_GRAPH_COLORS.route,
-          width: 11,
-          height: 8,
-        },
-      });
-    });
-  });
-
-  const workspaces = Array.from(workspaceMap.entries()).filter(([, agentNames]) => agentNames.length > 1);
-  const totalWorkspaceWidth = Math.max(0, (workspaces.length - 1) * WORKSPACE_SPACING_X);
-  const workspaceStartX = GATEWAY_X + 420 - totalWorkspaceWidth / 2;
-  workspaces.forEach(([ws, agentNames], i) => {
-    const nodeId = `ws-${i}`;
-    const fallbackX = workspaceStartX + i * WORKSPACE_SPACING_X;
-    const fallbackY = WORKSPACE_ROW_Y;
-    fallbackPositions.set(nodeId, { x: fallbackX, y: fallbackY });
-    nodes.push({
-      id: nodeId,
-      type: "workspace",
-      position: getPosition(nodeId, fallbackX, fallbackY),
-      data: {
-        path: ws,
-        agentNames,
-        selected: selectedWorkspacePath === ws,
-        onClick: () => onSelectWorkspace(ws),
-      },
-      draggable: true,
-    });
-
-    for (const a of agents) {
-      if (a.workspace === ws) {
-        edges.push({
-          id: `ws-${a.id}-${i}`,
-          source: `agent-${a.id}`,
-          target: nodeId,
-          style: { stroke: AGENT_GRAPH_COLORS.workspace, strokeWidth: 0.95, strokeDasharray: "2 6" },
-          markerEnd: {
-            type: MarkerType.ArrowClosed,
-            color: AGENT_GRAPH_COLORS.workspace,
-            width: 10,
-            height: 7,
-          },
-        });
-      }
-    }
-  });
-
-  return { nodes, edges };
-}
-
-/* ================================================================
-   Detail Panel
-   ================================================================ */
-
-function AgentDetail({
-  agent,
-  idx,
-  allAgents,
-  onUpdated,
-}: {
-  agent: Agent;
-  idx: number;
-  allAgents: Agent[];
-  onUpdated: () => Promise<void>;
-}) {
-  const sc = STATUS_COLORS[agent.status] || STATUS_COLORS.unknown;
-
-  const parentAgents = useMemo(
-    () => allAgents.filter((a) => a.subagents.includes(agent.id)),
-    [agent.id, allAgents]
-  );
-
-  const childAgents = useMemo(
-    () =>
-      agent.subagents
-        .map((sid) => allAgents.find((a) => a.id === sid))
-        .filter(Boolean) as Agent[],
-    [agent.subagents, allAgents]
-  );
-
-  const [showIdentity, setShowIdentity] = useState(false);
-  const [identityDraft, setIdentityDraft] = useState(agent.identitySnippet || "");
-  const [editingIdentity, setEditingIdentity] = useState(false);
-  const [savingIdentity, setSavingIdentity] = useState(false);
-  const [identityError, setIdentityError] = useState<string | null>(null);
-
-  useEffect(() => {
-    setIdentityDraft(agent.identitySnippet || "");
-    setEditingIdentity(false);
-    setIdentityError(null);
-  }, [agent.id, agent.identitySnippet]);
-
-  const saveIdentityMarkdown = useCallback(async () => {
-    setSavingIdentity(true);
-    setIdentityError(null);
-    try {
-      const response = await fetch("/api/agents", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          action: "save-identity-markdown",
-          id: agent.id,
-          workspace: agent.workspace,
-          markdown: identityDraft,
-        }),
-      });
-      const json = (await response.json()) as { error?: string };
-      if (!response.ok) {
-        throw new Error(json.error || `HTTP ${response.status}`);
-      }
-      await onUpdated();
-      setEditingIdentity(false);
-    } catch (error) {
-      setIdentityError(error instanceof Error ? error.message : String(error));
-    } finally {
-      setSavingIdentity(false);
-    }
-  }, [agent.id, agent.workspace, identityDraft, onUpdated]);
-
-  return (
-    <div className="rounded-xl border border-foreground/10 bg-card p-5 space-y-4">
-      {/* Header */}
-      <div className="flex items-center gap-4">
-        <div
-          className="flex h-10 w-10 items-center justify-center rounded-xl bg-[var(--accent-brand-subtle)] ring-1 ring-[var(--accent-brand-border)] text-lg font-bold shadow-lg"
-        >
-          {agent.emoji}
-        </div>
-        <div>
-          <div className="flex items-center gap-2">
-            <h2 className="text-xs font-bold text-foreground">{agent.name}</h2>
-            <span className={cn("h-2.5 w-2.5 rounded-full", sc.dot)} />
-            <span className={cn("text-xs font-medium", sc.text)}>
-              {agent.status === "active" ? "Active" : agent.status === "idle" ? "Idle" : "Unknown"}
-            </span>
-            {agent.isDefault && (
-              <span className="rounded-full bg-[var(--accent-brand-subtle)] px-2 py-0.5 text-xs font-medium text-[var(--accent-brand-text)]">
-                <Shield className="mr-0.5 inline h-2.5 w-2.5" /> Default
-              </span>
-            )}
-          </div>
-          <p className="text-xs text-muted-foreground">
-            ID: <code className="text-muted-foreground">{agent.id}</code> ·{" "}
-            {formatAgo(agent.lastActive)}
-          </p>
-        </div>
-      </div>
-
-      {/* Stats */}
-      <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
-        <MiniStat
-          icon={<Cpu className="h-3.5 w-3.5 text-[var(--accent-brand-text)]" />}
-          label="Model"
-          value={shortModel(agent.model)}
-        />
-        <MiniStat
-          icon={<MessageSquare className="h-3.5 w-3.5 text-blue-400" />}
-          label="Sessions"
-          value={String(agent.sessionCount)}
-        />
-        <MiniStat
-          icon={<Zap className="h-3.5 w-3.5 text-amber-400" />}
-          label="Tokens"
-          value={formatTokens(agent.totalTokens)}
-        />
-        <MiniStat
-          icon={<Clock className="h-3.5 w-3.5 text-emerald-400" />}
-          label="Last Active"
-          value={formatAgo(agent.lastActive)}
-        />
-      </div>
-
-      {/* Grid */}
-      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-        {/* Model Stack */}
-        <div className="min-w-0 rounded-lg border border-foreground/10 bg-card/80 p-3 space-y-2">
-          <div className="flex items-center gap-1.5 text-xs font-semibold text-foreground/70">
-            <Layers className="h-3.5 w-3.5 text-[var(--accent-brand-text)]" /> Model Stack
-          </div>
-          <div className="space-y-1">
-            <div className="flex items-center gap-1.5">
-              <span className="rounded bg-[var(--accent-brand-subtle)] px-1.5 py-0.5 text-xs font-bold text-[var(--accent-brand-text)]">PRIMARY</span>
-              <code className="text-xs text-foreground/70">{shortModel(agent.model)}</code>
-            </div>
-            {agent.fallbackModels.map((fm, i) => (
-              <div key={fm} className="flex items-center gap-1.5 pl-1">
-                <span className="text-xs text-muted-foreground/60">#{i + 1}</span>
-                <ArrowRight className="h-2.5 w-2.5 text-muted-foreground/40" />
-                <code className="text-xs text-muted-foreground">{shortModel(fm)}</code>
-              </div>
-            ))}
-          </div>
-        </div>
-
-        {/* Channels */}
-        <div className="rounded-lg border border-foreground/10 bg-card/80 p-3 space-y-2">
-          <div className="flex items-center gap-1.5 text-xs font-semibold text-foreground/70">
-            <Globe className="h-3.5 w-3.5 text-blue-400" /> Channels & Bindings
-          </div>
-          {agent.bindings.length === 0 ? (
-            <p className="text-xs text-muted-foreground/60">No bindings</p>
-          ) : (
-            <div className="space-y-1">
-              {agent.bindings.map((b, i) => (
-                <div key={i} className="flex items-center gap-1.5 rounded bg-foreground/5 px-2 py-1">
-                  <span className="text-sm">{channelIcon(b.split(" ")[0])}</span>
-                  <code className="text-xs text-foreground/70">{b}</code>
-                </div>
-              ))}
-            </div>
-          )}
-        </div>
-
-        {/* Workspace */}
-        <div className="rounded-lg border border-foreground/10 bg-card/80 p-3 space-y-2">
-          <div className="flex items-center gap-1.5 text-xs font-semibold text-foreground/70">
-            <FolderOpen className="h-3.5 w-3.5 text-amber-400" /> Workspace
-          </div>
-          <div className="flex items-center gap-1.5">
-            <code className="flex-1 truncate text-xs text-muted-foreground">{agent.workspace}</code>
-            <CopyBtn text={agent.workspace} />
-          </div>
-          <p className="text-xs text-muted-foreground/60">
-            Agent dir:{" "}
-            <code className="text-muted-foreground wrap-break-word break-all">
-              {agent.agentDir}
-            </code>
-          </p>
-        </div>
-
-        {/* Relationships */}
-        <div className="rounded-lg border border-foreground/10 bg-card/80 p-3 space-y-2">
-          <div className="flex items-center gap-1.5 text-xs font-semibold text-foreground/70">
-            <Network className="h-3.5 w-3.5 text-[var(--accent-brand-text)]" /> Relationships
-          </div>
-          {parentAgents.length === 0 && childAgents.length === 0 ? (
-            <p className="text-xs text-muted-foreground/60">No sub-agent relationships</p>
-          ) : (
-            <div className="space-y-1.5">
-              {parentAgents.length > 0 && (
-                <div>
-                  <p className="text-xs uppercase tracking-wider text-muted-foreground/60 mb-0.5">Reports to</p>
-                  {parentAgents.map((p) => (
-                    <span key={p.id} className="inline-flex items-center gap-1 rounded bg-foreground/5 px-2 py-0.5 text-xs text-foreground/70 mr-1">
-                      {p.emoji} {p.name}
-                    </span>
-                  ))}
-                </div>
-              )}
-              {childAgents.length > 0 && (
-                <div>
-                  <p className="text-xs uppercase tracking-wider text-muted-foreground/60 mb-0.5">Delegates to</p>
-                  {childAgents.map((c) => (
-                    <span key={c.id} className="inline-flex items-center gap-1 rounded bg-foreground/5 px-2 py-0.5 text-xs text-foreground/70 mr-1">
-                      {c.emoji} {c.name}
-                    </span>
-                  ))}
-                </div>
-              )}
-            </div>
-          )}
-        </div>
-      </div>
-
-      <AgentIntegrationsPanel agentId={agent.id} agentName={agent.name} />
-
-      {/* Identity */}
-      <div className="rounded-lg border border-foreground/10 bg-card/80">
-        <button
-          type="button"
-          onClick={() => setShowIdentity(!showIdentity)}
-          className="flex w-full items-center gap-1.5 px-3 py-2 text-left"
-        >
-          <Bot className="h-3.5 w-3.5 text-pink-400" />
-          <span className="flex-1 text-xs font-semibold text-foreground/70">
-            Identity
-          </span>
-          {showIdentity ? (
-            <ChevronUp className="h-3 w-3 text-muted-foreground/60" />
-          ) : (
-            <ChevronDown className="h-3 w-3 text-muted-foreground/60" />
-          )}
-        </button>
-        {showIdentity && (
-          <div className="space-y-2 border-t border-foreground/5 px-3 py-2">
-            {editingIdentity ? (
-              <textarea
-                value={identityDraft}
-                onChange={(e) => setIdentityDraft(e.target.value)}
-                rows={8}
-                className="w-full rounded-md border border-foreground/10 bg-foreground/5 px-2 py-1.5 font-mono text-xs leading-relaxed text-foreground focus:border-[var(--accent-brand-border)] focus:outline-none"
-                placeholder="Write IDENTITY.md content..."
-                disabled={savingIdentity}
-              />
-            ) : (
-              <pre className="whitespace-pre-wrap text-xs leading-relaxed text-muted-foreground">
-                {identityDraft || "No IDENTITY.md content yet."}
-              </pre>
-            )}
-            {identityError && (
-              <p className="text-xs text-red-300">{identityError}</p>
-            )}
-            <div className="flex items-center justify-end gap-2">
-              {editingIdentity ? (
-                <>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setIdentityDraft(agent.identitySnippet || "");
-                      setEditingIdentity(false);
-                      setIdentityError(null);
-                    }}
-                    disabled={savingIdentity}
-                    className="rounded-md border border-foreground/10 px-2.5 py-1 text-xs text-muted-foreground transition-colors hover:bg-foreground/5 disabled:opacity-50"
-                  >
-                    Cancel
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      void saveIdentityMarkdown();
-                    }}
-                    disabled={savingIdentity}
-                    className="rounded-md bg-[var(--accent-brand)] px-2.5 py-1 text-xs font-medium text-[var(--accent-brand-on)] transition-opacity disabled:opacity-50"
-                  >
-                    {savingIdentity ? "Saving..." : "Save IDENTITY.md"}
-                  </button>
-                </>
-              ) : (
-                <button
-                  type="button"
-                  onClick={() => setEditingIdentity(true)}
-                  className="rounded-md border border-foreground/10 px-2.5 py-1 text-xs text-muted-foreground transition-colors hover:bg-foreground/5"
-                >
-                  Edit
-                </button>
-              )}
-            </div>
-          </div>
-        )}
-      </div>
-    </div>
-  );
-}
-
-function AgentIntegrationsPanel({
-  agentId,
-  agentName,
-}: {
-  agentId: string;
-  agentName: string;
-}) {
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
-  const [accounts, setAccounts] = useState<
-    Array<{
-      id: string;
-      email: string;
-      label: string;
-      status: string;
-      accessLevel: string;
-      capabilityMatrix: Array<{
-        key: string;
-        label: string;
-        category: "read" | "draft" | "write";
-        enabled: boolean;
-        policy: "deny" | "ask" | "allow" | null;
-      }>;
-    }>
-  >([]);
-
-  const load = useCallback(async () => {
-    setLoading(true);
-    setError(null);
-    try {
-      const response = await fetch(`/api/integrations?agentId=${encodeURIComponent(agentId)}`, {
-        cache: "no-store",
-      });
-      const json = (await response.json()) as {
-        error?: string;
-        store?: {
-          accounts?: Array<{
-            id: string;
-            email: string;
-            label: string;
-            status: string;
-            accessLevel: string;
-            capabilityMatrix: Array<{
-              key: string;
-              label: string;
-              category: "read" | "draft" | "write";
-              enabled: boolean;
-              policy: "deny" | "ask" | "allow" | null;
-            }>;
-          }>;
-        };
-      };
-      if (!response.ok) {
-        throw new Error(json.error || `Failed to load integrations for ${agentName}`);
-      }
-      setAccounts(json.store?.accounts || []);
-    } catch (loadError) {
-      setError(loadError instanceof Error ? loadError.message : String(loadError));
-    } finally {
-      setLoading(false);
-    }
-  }, [agentId, agentName]);
-
-  useEffect(() => {
-    void load();
-  }, [load]);
-
-  return (
-    <div className="rounded-lg border border-foreground/10 bg-card/80 p-3 space-y-3">
-      <div className="flex items-center justify-between gap-3">
-        <div className="flex items-center gap-1.5 text-xs font-semibold text-foreground/70">
-          <ShieldCheck className="h-3.5 w-3.5 text-emerald-400" />
-          Google Integrations
-        </div>
-        <Link
-          href={`/integrations?agentId=${encodeURIComponent(agentId)}`}
-          className="text-xs text-[var(--accent-brand-text)] hover:text-[var(--accent-brand)]"
-        >
-          Manage
-        </Link>
-      </div>
-
-      {loading ? (
-        <div className="flex items-center gap-2 py-1 text-xs text-muted-foreground/60">
-          <InlineSpinner size="sm" />
-          Loading integration access...
-        </div>
-      ) : error ? (
-        <div className="rounded-lg border border-rose-500/20 bg-rose-500/10 px-3 py-2 text-xs text-rose-400">
-          {error}
-        </div>
-      ) : accounts.length === 0 ? (
-        <div className="rounded-lg border border-dashed border-foreground/10 px-3 py-2 text-xs text-muted-foreground/60">
-          No Google accounts are connected for Mission Control yet.
-        </div>
-      ) : (
-        <div className="space-y-2">
-          {accounts.map((account) => {
-            const allowedReads = account.capabilityMatrix.filter(
-              (capability) =>
-                capability.enabled &&
-                capability.category === "read" &&
-                capability.policy !== "deny",
-            ).length;
-            const approvalWrites = account.capabilityMatrix.filter(
-              (capability) =>
-                capability.enabled &&
-                capability.category === "write" &&
-                capability.policy === "ask",
-            ).length;
-            const autoWrites = account.capabilityMatrix.filter(
-              (capability) =>
-                capability.enabled &&
-                capability.category === "write" &&
-                capability.policy === "allow",
-            ).length;
-            return (
-              <div key={account.id} className="rounded-lg border border-foreground/10 bg-foreground/5 p-3">
-                <div className="flex items-start justify-between gap-3">
-                  <div>
-                    <p className="text-xs font-semibold text-foreground/90">{account.label}</p>
-                    <p className="text-xs text-muted-foreground">{account.email}</p>
-                  </div>
-                  <span className="rounded-full bg-[var(--accent-brand-subtle)] px-2 py-0.5 text-[10px] font-medium text-[var(--accent-brand-text)]">
-                    {account.accessLevel}
-                  </span>
-                </div>
-                <div className="mt-2 flex flex-wrap gap-1.5 text-[10px]">
-                  <span className="rounded bg-emerald-500/10 px-2 py-0.5 text-emerald-400">
-                    {allowedReads} read allowed
-                  </span>
-                  <span className="rounded bg-amber-500/10 px-2 py-0.5 text-amber-400">
-                    {approvalWrites} write needs approval
-                  </span>
-                  <span className="rounded bg-rose-500/10 px-2 py-0.5 text-rose-400">
-                    {autoWrites} write auto-allowed
-                  </span>
-                </div>
-              </div>
-            );
-          })}
-        </div>
-      )}
-    </div>
-  );
-}
-
-function MiniStat({
-  icon,
-  label,
-  value,
-}: {
-  icon: React.ReactNode;
-  label: string;
-  value: string;
-}) {
-  return (
-    <div className="flex items-center gap-2 rounded-lg border border-foreground/10 bg-card/80 px-3 py-2">
-      {icon}
-      <div>
-        <p className="text-xs text-muted-foreground/60">{label}</p>
-        <p className="text-xs font-semibold text-foreground/90">{value}</p>
-      </div>
-    </div>
-  );
-}
-
-function CopyBtn({ text }: { text: string }) {
-  const [copied, setCopied] = useState(false);
-  return (
-    <button
-      type="button"
-      onClick={() => {
-        navigator.clipboard.writeText(text);
-        setCopied(true);
-        setTimeout(() => setCopied(false), 1500);
-      }}
-      className="rounded bg-foreground/5 p-1 text-muted-foreground/60 hover:text-muted-foreground"
-    >
-      {copied ? <CheckCircle className="h-3 w-3 text-emerald-400" /> : <Copy className="h-3 w-3" />}
-    </button>
-  );
-}
-
-/* ================================================================
-   Summary Bar
-   ================================================================ */
-
-function SummaryBar({ agents }: { agents: Agent[] }) {
-  const totalSessions = agents.reduce((s, a) => s + a.sessionCount, 0);
-  const activeCount = agents.filter((a) => a.status === "active").length;
-  const channelSet = new Set(agents.flatMap((a) => a.channels));
-
-  return (
-    <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
-      {[
-        { icon: <Users className="h-4 w-4 text-[var(--accent-brand-text)]" />, label: "Agents", value: String(agents.length) },
-        { icon: <Zap className="h-4 w-4 text-emerald-600 dark:text-emerald-300" />, label: "Active", value: `${activeCount} / ${agents.length}` },
-        { icon: <MessageSquare className="h-4 w-4 text-sky-600 dark:text-sky-300" />, label: "Sessions", value: String(totalSessions) },
-        { icon: <Hash className="h-4 w-4 text-amber-600 dark:text-amber-300" />, label: "Channels", value: String(channelSet.size) },
-      ].map((s) => (
-        <div key={s.label} className="flex items-center gap-3 rounded-xl border border-stone-200 bg-white px-4 py-3 shadow-sm dark:border-stone-700 dark:bg-stone-800">
-          <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-stone-100 dark:bg-stone-700">
-            {s.icon}
-          </div>
-          <div>
-            <p className="text-xs text-stone-500 dark:text-stone-400">{s.label}</p>
-            <p className="text-sm font-bold text-stone-900 dark:text-stone-100">{s.value}</p>
-          </div>
-        </div>
-      ))}
-    </div>
-  );
-}
-
-/* ================================================================
-   Grid View (card-based, no React Flow)
-   ================================================================ */
-
-function GridView({
-  agents,
-  selectedId,
-  onSelect,
-}: {
-  agents: Agent[];
-  selectedId: string | null;
-  onSelect: (id: string) => void;
-}) {
-  return (
-    <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3 stagger-cards">
-      {agents.map((agent, idx) => {
-        const sc = STATUS_COLORS[agent.status] || STATUS_COLORS.unknown;
-        const selected = selectedId === agent.id;
-
-        return (
-          <button
-            type="button"
-            key={agent.id}
-            onClick={() => onSelect(agent.id)}
-            className={cn(
-              "relative rounded-xl p-4 text-left transition-all glass-glow",
-              selected
-                ? "border-[var(--accent-brand-border)] bg-[var(--accent-brand-subtle)] shadow-lg shadow-[var(--accent-brand-ring)]"
-                : ""
-            )}
-          >
-            <div className="absolute -right-1 -top-1">
-              <span className="relative flex h-3 w-3">
-                {agent.status === "active" && (
-                  <span className={cn("absolute inline-flex h-full w-full animate-ping rounded-full opacity-40", sc.dot)} />
-                )}
-                <span className={cn("relative inline-flex h-3 w-3 rounded-full ring-2", sc.dot, `ring-${agent.status === "active" ? "emerald" : agent.status === "idle" ? "amber" : "zinc"}-400/30`)} />
-              </span>
-            </div>
-            <div className="flex items-start gap-3">
-              <div
-                className="flex h-10 w-10 items-center justify-center rounded-lg bg-[var(--accent-brand-subtle)] ring-1 ring-[var(--accent-brand-border)] text-xs"
-              >
-                {agent.emoji}
-              </div>
-              <div className="min-w-0 flex-1">
-                <h3 className="truncate text-sm font-semibold text-foreground">{agent.name}</h3>
-                <p className="truncate text-xs text-muted-foreground">{shortModel(agent.model)}</p>
-                {agent.isDefault && (
-                  <span className="mt-1 inline-block rounded-full bg-[var(--accent-brand-subtle)] px-2 py-0.5 text-xs font-medium text-[var(--accent-brand-text)]">Default</span>
-                )}
-              </div>
-            </div>
-            {agent.channels.length > 0 && (
-              <div className="mt-2 flex flex-wrap gap-1">
-                {agent.channels.map((ch) => (
-                  <span key={ch} className="rounded border border-foreground/10 bg-foreground/5 px-1.5 py-0.5 text-xs text-muted-foreground">
-                    {channelIcon(ch)} {ch}
-                  </span>
-                ))}
-              </div>
-            )}
-            <div className="mt-2 grid grid-cols-3 gap-1.5 text-center">
-              <div className="rounded bg-foreground/5 py-1">
-                <p className="text-xs text-muted-foreground/60">Sess.</p>
-                <p className="text-xs font-semibold text-foreground/70">{agent.sessionCount}</p>
-              </div>
-              <div className="rounded bg-foreground/5 py-1">
-                <p className="text-xs text-muted-foreground/60">Tokens</p>
-                <p className="text-xs font-semibold text-foreground/70">{formatTokens(agent.totalTokens)}</p>
-              </div>
-              <div className="rounded bg-foreground/5 py-1">
-                <p className="text-xs text-muted-foreground/60">Active</p>
-                <p className={cn("text-xs font-semibold", sc.text)}>{formatAgo(agent.lastActive)}</p>
-              </div>
-            </div>
-          </button>
-        );
-      })}
-    </div>
-  );
-}
-
-/* ================================================================
-   Flow View
-   ================================================================ */
-
-function FlowViewInner({
-  data,
-  selectedId,
-  onSelect,
-  selectedWorkspacePath,
-  onSelectWorkspace,
-}: {
-  data: AgentsResponse;
-  selectedId: string | null;
-  onSelect: (id: string) => void;
-  selectedWorkspacePath: string | null;
-  onSelectWorkspace: (workspacePath: string) => void;
-}) {
-  const { fitView } = useReactFlow();
-  const [savedPos, setSavedPos] = useState<Record<string, { x: number; y: number }>>(loadSavedPositions);
-
-  const { nodes: initialNodes, edges: initialEdges } = useMemo(
-    () =>
-      buildGraph(
-        data,
-        selectedId,
-        onSelect,
-        selectedWorkspacePath,
-        onSelectWorkspace,
-        savedPos
-      ),
-    [data, selectedId, onSelect, selectedWorkspacePath, onSelectWorkspace, savedPos]
-  );
-
-  const [nodes, setNodes, onNodesChange] = useNodesState(initialNodes);
-  const [edges, setEdges, onEdgesChange] = useEdgesState(initialEdges);
-
-  // Update when data or selection changes
-  useEffect(() => {
-    const { nodes: newNodes, edges: newEdges } = buildGraph(
-      data,
-      selectedId,
-      onSelect,
-      selectedWorkspacePath,
-      onSelectWorkspace,
-      savedPos
-    );
-    setNodes(newNodes);
-    setEdges(newEdges);
-  }, [
-    data,
-    selectedId,
-    onSelect,
-    selectedWorkspacePath,
-    onSelectWorkspace,
-    savedPos,
-    setNodes,
-    setEdges,
-  ]);
-
-  // Persist node positions when user finishes dragging
-  const onNodeDragStop = useCallback(
-    (_event: React.MouseEvent, node: Node) => {
-      setSavedPos((prev) => {
-        const next = { ...prev, [node.id]: { x: node.position.x, y: node.position.y } };
-        savePositions(next);
-        return next;
-      });
-    },
-    []
-  );
-
-  const handleResetLayout = useCallback(() => {
-    clearSavedPositions();
-    setSavedPos({});
-  }, []);
-
-  return (
-    <ReactFlow
-      nodes={nodes}
-      edges={edges}
-      onNodesChange={onNodesChange}
-      onEdgesChange={onEdgesChange}
-      onNodeDragStop={onNodeDragStop}
-      onInit={() => {
-        setTimeout(() => fitView({ padding: 0.28, maxZoom: 0.9 }), 0);
-        setTimeout(() => fitView({ padding: 0.28, maxZoom: 0.9, duration: 200 }), 300);
-      }}
-      onNodeMouseEnter={undefined}
-      nodeTypes={nodeTypes}
-      fitView
-      fitViewOptions={{ padding: 0.28, maxZoom: 0.9 }}
-      proOptions={{ hideAttribution: true }}
-      minZoom={0.1}
-      maxZoom={2}
-      defaultEdgeOptions={{ type: "default" }}
-    >
-      <Background className="!bg-card dark:!bg-zinc-950" color="var(--border)" gap={20} size={1} />
-      <Controls
-        showInteractive={false}
-        className="!bg-card dark:!bg-zinc-900 !border-border !shadow-xl [&>button]:!bg-secondary dark:[&>button]:!bg-zinc-800 [&>button]:!border-border [&>button]:!text-muted-foreground [&>button:hover]:!bg-accent dark:[&>button:hover]:!bg-zinc-700"
-      />
-      <div className="absolute top-3 right-3 z-10">
-        <button
-          onClick={handleResetLayout}
-          className="flex items-center gap-1.5 rounded-md border border-border bg-card px-2.5 py-1.5 text-xs text-muted-foreground shadow-sm hover:bg-accent hover:text-foreground transition-colors dark:bg-zinc-900 dark:hover:bg-zinc-800"
-          title="Reset to automatic layout"
-        >
-          <RotateCcw className="h-3 w-3" />
-          Reset layout
-        </button>
-      </div>
-    </ReactFlow>
-  );
-}
-
-function FlowView({
-  data,
-  selectedId,
-  onSelect,
-  selectedWorkspacePath,
-  onSelectWorkspace,
-}: {
-  data: AgentsResponse;
-  selectedId: string | null;
-  onSelect: (id: string) => void;
-  selectedWorkspacePath: string | null;
-  onSelectWorkspace: (workspacePath: string) => void;
-}) {
-  const containerRef = useRef<HTMLDivElement>(null);
-  const [dims, setDims] = useState<{ w: number; h: number } | null>(null);
-
-  // Measure the container with ResizeObserver for a concrete pixel size
-  useEffect(() => {
-    const el = containerRef.current;
-    if (!el) return;
-    const ro = new ResizeObserver((entries) => {
-      for (const entry of entries) {
-        const { width, height } = entry.contentRect;
-        if (width > 0 && height > 0) {
-          setDims({ w: width, h: height });
-        }
-      }
-    });
-    ro.observe(el);
-    return () => ro.disconnect();
-  }, []);
-
-  return (
-    <div
-      ref={containerRef}
-      className="relative h-0 flex-1 w-full border-t border-border overflow-hidden bg-card dark:bg-zinc-950"
-    >
-      {dims ? (
-        <div style={{ width: dims.w, height: dims.h, position: "absolute", inset: 0 }}>
-          <ReactFlowProvider>
-            <FlowViewInner
-              data={data}
-              selectedId={selectedId}
-              onSelect={onSelect}
-              selectedWorkspacePath={selectedWorkspacePath}
-              onSelectWorkspace={onSelectWorkspace}
-            />
-          </ReactFlowProvider>
-        </div>
-      ) : (
-        <div className="flex h-full items-center justify-center text-muted-foreground/40">
-          <span className="inline-flex items-center gap-1">
-            <span className="h-1.5 w-1.5 animate-bounce rounded-full bg-current [animation-delay:0ms]" />
-            <span className="h-1.5 w-1.5 animate-bounce rounded-full bg-current [animation-delay:150ms]" />
-            <span className="h-1.5 w-1.5 animate-bounce rounded-full bg-current [animation-delay:300ms]" />
-          </span>
-        </div>
-      )}
-    </div>
-  );
-}
 
 /* ================================================================
    Add Agent Modal
@@ -1979,7 +836,7 @@ function ModelPicker({
             })}
 
             {Object.keys(filteredGroups).length === 0 && search && (
-              <div className="px-3 py-6 text-center text-xs text-muted-foreground/50">
+              <div className="px-3 py-3 text-center text-xs text-muted-foreground/50">
                 No models match &ldquo;{search}&rdquo;
               </div>
             )}
@@ -2791,12 +1648,12 @@ function AddAgentModal({
   }, [name, displayName, model, fallbacks, setAsDefault, subagents, workspace, agentDir, bindings, onCreated, onClose]);
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 sm:p-6">
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 sm:p-4">
       <div className="absolute inset-0 bg-black/60 backdrop-blur-sm animate-backdrop-in" onClick={() => { if (!busy) onClose(); }} />
 
-      <div className="relative z-10 flex max-h-[calc(100vh-2rem)] w-full max-w-lg flex-col overflow-hidden rounded-2xl glass-strong animate-modal-in">
+      <div className="relative z-10 flex max-h-[calc(100vh-5rem)] w-full max-w-lg flex-col overflow-hidden rounded-2xl glass-strong animate-modal-in">
         {/* Header */}
-        <div className="flex shrink-0 items-center justify-between border-b border-foreground/10 px-5 py-4">
+        <div className="flex shrink-0 items-center justify-between border-b border-foreground/10 px-4 py-4">
           <div className="flex items-center gap-2.5">
             <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-[var(--accent-brand-subtle)]">
               <Sparkles className="h-4 w-4 text-[var(--accent-brand-text)]" />
@@ -2812,9 +1669,9 @@ function AddAgentModal({
         </div>
 
         {/* Scrollable form */}
-        <div className="min-h-0 flex-1 space-y-5 overflow-y-auto px-5 py-4">
+        <div className="min-h-0 flex-1 space-y-2 overflow-y-auto px-4 py-4">
           {/* Step 1 — Identity */}
-          <div className="space-y-3">
+          <div className="space-y-2">
             <p className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground/70">
               1. Identity
             </p>
@@ -2852,7 +1709,7 @@ function AddAgentModal({
           </div>
 
           {/* Step 2 — Model */}
-          <div className="space-y-3">
+          <div className="space-y-2">
             <p className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground/70">
               2. Model
             </p>
@@ -2877,7 +1734,7 @@ function AddAgentModal({
           </div>
 
           {/* Step 3 — Channels */}
-          <div className="space-y-3">
+          <div className="space-y-2">
             <p className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground/70">
               3. Channel bindings
             </p>
@@ -2897,7 +1754,7 @@ function AddAgentModal({
           </div>
 
           {/* Step 4 — Advanced */}
-          <div className="space-y-3">
+          <div className="space-y-2">
             <button
               type="button"
               onClick={() => setShowAdvanced(!showAdvanced)}
@@ -2907,7 +1764,7 @@ function AddAgentModal({
               4. Advanced options
             </button>
             {showAdvanced && (
-              <div className="space-y-4 rounded-lg border border-foreground/10 bg-foreground/[0.02] p-3">
+              <div className="space-y-2 rounded-lg border border-foreground/10 bg-foreground/[0.02] p-3">
                 <div>
                   <label className="mb-1 block text-xs font-medium text-muted-foreground/70">
                     Custom workspace path
@@ -3012,7 +1869,7 @@ function AddAgentModal({
         </div>
 
         {/* Footer */}
-        <div className="flex shrink-0 items-center justify-end gap-2 border-t border-foreground/10 px-5 py-3">
+        <div className="flex shrink-0 items-center justify-end gap-2 border-t border-foreground/10 px-4 py-3">
           <button
             type="button"
             onClick={onClose}
@@ -3398,7 +2255,7 @@ function EditAgentModal({
   const mutating = busy || deleting;
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 sm:p-6">
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 sm:p-4">
       <div
         className="absolute inset-0 bg-black/60 backdrop-blur-sm animate-backdrop-in"
         onClick={() => {
@@ -3406,12 +2263,12 @@ function EditAgentModal({
         }}
       />
 
-      <div className="relative z-10 flex h-full max-h-[calc(100vh-2rem)] w-full max-w-xl flex-col overflow-hidden rounded-2xl glass-strong animate-modal-in">
+      <div className="relative z-10 flex h-full max-h-[calc(100vh-5rem)] w-full max-w-xl flex-col overflow-hidden rounded-2xl glass-strong animate-modal-in">
         {/* ── Header ── */}
-        <div className="flex shrink-0 items-center justify-between border-b border-foreground/10 px-5 py-4">
-          <div className="flex items-center gap-3">
+        <div className="flex shrink-0 items-center justify-between border-b border-foreground/10 px-4 py-4">
+          <div className="flex items-center gap-2">
             <div
-              className="flex h-9 w-9 items-center justify-center rounded-xl bg-[var(--accent-brand-subtle)] ring-1 ring-[var(--accent-brand-border)] text-sm font-bold shadow"
+              className="flex h-8 w-8 items-center justify-center rounded-xl bg-[var(--accent-brand-subtle)] ring-1 ring-[var(--accent-brand-border)] text-sm font-bold shadow"
             >
               {agent.emoji}
             </div>
@@ -3452,9 +2309,9 @@ function EditAgentModal({
         </div>
 
         {/* ── Scrollable form ── */}
-        <div className="min-h-0 flex-1 space-y-5 overflow-y-auto px-5 py-4">
+        <div className="min-h-0 flex-1 space-y-2 overflow-y-auto px-4 py-4">
           {/* 1. Identity + default */}
-          <div className="space-y-3 rounded-lg border border-foreground/10 bg-foreground/[0.02] p-3">
+          <div className="space-y-2 rounded-lg border border-foreground/10 bg-foreground/[0.02] p-3">
             <div className="flex items-center justify-between gap-2">
               <p className="text-xs font-semibold text-foreground/70">Agent order</p>
               <div className="flex items-center gap-1.5">
@@ -3751,7 +2608,7 @@ function EditAgentModal({
                   — control which skills this agent can use
                 </span>
               </label>
-              <div className="mb-2 flex items-center gap-3">
+              <div className="mb-2 flex items-center gap-2">
                 <label className="flex cursor-pointer items-center gap-1.5 text-xs text-foreground/80">
                   <input
                     type="radio"
@@ -3942,7 +2799,7 @@ function EditAgentModal({
         </div>
 
         {/* ── Footer ── */}
-        <div className="flex shrink-0 items-center justify-end gap-2 border-t border-foreground/10 px-5 py-3">
+        <div className="flex shrink-0 items-center justify-end gap-2 border-t border-foreground/10 px-4 py-3">
           <button
             type="button"
             onClick={onClose}
@@ -4226,14 +3083,14 @@ function WorkspaceFilesModal({
   }, [filteredFiles]);
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 sm:p-6">
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 sm:p-4">
       <div
         className="absolute inset-0 bg-black/60 backdrop-blur-sm animate-backdrop-in"
         onClick={onClose}
       />
 
-      <div className="relative z-10 flex max-h-[calc(100vh-2rem)] w-full max-w-3xl flex-col overflow-hidden rounded-2xl glass-strong animate-modal-in">
-        <div className="flex shrink-0 items-center justify-between border-b border-foreground/10 px-5 py-4">
+      <div className="relative z-10 flex max-h-[calc(100vh-5rem)] w-full max-w-3xl flex-col overflow-hidden rounded-2xl glass-strong animate-modal-in">
+        <div className="flex shrink-0 items-center justify-between border-b border-foreground/10 px-4 py-4">
           <div className="min-w-0">
             <div className="flex items-center gap-2">
               <FolderOpen className="h-4 w-4 text-amber-400" />
@@ -4254,7 +3111,7 @@ function WorkspaceFilesModal({
           </button>
         </div>
 
-        <div className="shrink-0 space-y-3 border-b border-foreground/10 px-5 py-3">
+        <div className="shrink-0 space-y-2 border-b border-foreground/10 px-4 py-3">
           <div className="flex items-center gap-2 rounded-lg border border-foreground/10 bg-foreground/5 px-3 py-2 text-sm text-muted-foreground">
             <Search className="h-3.5 w-3.5 shrink-0 text-muted-foreground/60" />
             <input
@@ -4275,7 +3132,7 @@ function WorkspaceFilesModal({
           </p>
         </div>
 
-        <div className="min-h-0 flex-1 overflow-y-auto px-5 py-3">
+        <div className="min-h-0 flex-1 overflow-y-auto px-4 py-3">
           {loading ? (
             <div className="flex items-center gap-2 text-xs text-muted-foreground/70">
               <span className="inline-flex items-center gap-0.5">
@@ -4294,7 +3151,7 @@ function WorkspaceFilesModal({
               No files match this filter.
             </p>
           ) : (
-            <div className="space-y-3">
+            <div className="space-y-2">
               {categorizedFiles.map((group) => (
                 <section key={group.key} className="space-y-1.5">
                   <div className="sticky top-0 z-[1] rounded-lg border border-foreground/10 bg-card/95 px-2.5 py-1.5 backdrop-blur-sm">
@@ -4336,7 +3193,7 @@ function WorkspaceFilesModal({
           )}
         </div>
 
-        <div className="flex shrink-0 items-center justify-end gap-2 border-t border-foreground/10 px-5 py-3">
+        <div className="flex shrink-0 items-center justify-end gap-2 border-t border-foreground/10 px-4 py-3">
           <button
             type="button"
             onClick={onClose}
@@ -4357,6 +3214,191 @@ function WorkspaceFilesModal({
           </button>
         </div>
       </div>
+    </div>
+  );
+}
+
+
+function SummaryBar({ agents }: { agents: Agent[] }) {
+  const total = agents.length;
+  const active = agents.filter((agent) => agent.status === "active").length;
+  const idle = agents.filter((agent) => agent.status === "idle").length;
+  const sessions = agents.reduce((sum, agent) => sum + agent.sessionCount, 0);
+
+  const items = [
+    { label: "Agents", value: total },
+    { label: "Active", value: active },
+    { label: "Idle", value: idle },
+    { label: "Sessions", value: sessions },
+  ];
+
+  return (
+    <div className="grid gap-2 sm:grid-cols-2 xl:grid-cols-4">
+      {items.map((item) => (
+        <div
+          key={item.label}
+          className="rounded-xl border border-foreground/10 bg-foreground/5 px-4 py-3"
+        >
+          <p className="text-[11px] uppercase tracking-wide text-muted-foreground/60">
+            {item.label}
+          </p>
+          <p className="mt-1 text-lg font-semibold text-foreground">
+            {item.value}
+          </p>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+function GridView({
+  agents,
+  selectedId,
+  onSelect,
+}: {
+  agents: Agent[];
+  selectedId: string | null;
+  onSelect: (id: string) => void;
+}) {
+  return (
+    <div className="grid gap-2 lg:grid-cols-2 2xl:grid-cols-3">
+      {agents.map((agent) => {
+        const selected = agent.id === selectedId;
+        return (
+          <button
+            key={agent.id}
+            type="button"
+            onClick={() => onSelect(agent.id)}
+            className={cn(
+              "rounded-2xl border px-4 py-3 text-left transition-colors",
+              selected
+                ? "border-[var(--accent-brand-border)] bg-[var(--accent-brand-subtle)]"
+                : "border-foreground/10 bg-foreground/5 hover:bg-foreground/10"
+            )}
+          >
+            <div className="flex items-start justify-between gap-2">
+              <div className="min-w-0">
+                <div className="flex items-center gap-2">
+                  <span className="text-base">{agent.emoji}</span>
+                  <p className="truncate text-sm font-semibold text-foreground">
+                    {agent.name}
+                  </p>
+                </div>
+                <p className="mt-1 truncate text-xs text-muted-foreground">
+                  {agent.id} · {shortModel(agent.model)}
+                </p>
+              </div>
+              <span
+                className={cn(
+                  "rounded-full px-2 py-0.5 text-[10px] font-medium",
+                  agent.status === "active"
+                    ? "bg-emerald-500/15 text-emerald-400"
+                    : agent.status === "idle"
+                      ? "bg-amber-500/15 text-amber-400"
+                      : "bg-foreground/10 text-muted-foreground"
+                )}
+              >
+                {agent.status}
+              </span>
+            </div>
+
+            <div className="mt-3 grid grid-cols-2 gap-2 text-xs text-muted-foreground">
+              <div className="rounded-lg bg-black/10 px-2 py-1.5">
+                Sessions: {agent.sessionCount}
+              </div>
+              <div className="rounded-lg bg-black/10 px-2 py-1.5">
+                Tokens: {formatTokens(agent.totalTokens)}
+              </div>
+            </div>
+          </button>
+        );
+      })}
+    </div>
+  );
+}
+
+function AgentDetail({
+  agent,
+  idx,
+  allAgents,
+  onUpdated,
+}: {
+  agent: Agent;
+  idx: number;
+  allAgents: Agent[];
+  onUpdated: () => void;
+}) {
+  return (
+    <div className="rounded-2xl border border-foreground/10 bg-foreground/5 p-4">
+      <div className="flex items-start justify-between gap-2">
+        <div className="min-w-0">
+          <div className="flex items-center gap-2">
+            <span className="text-lg">{agent.emoji}</span>
+            <h3 className="truncate text-base font-semibold text-foreground">
+              {agent.name}
+            </h3>
+          </div>
+          <p className="mt-1 text-xs text-muted-foreground">
+            Ordre {idx + 1}/{allAgents.length} · {agent.id}
+          </p>
+        </div>
+
+        <button
+          type="button"
+          onClick={onUpdated}
+          className="rounded-lg border border-foreground/10 px-3 py-1.5 text-xs text-muted-foreground hover:bg-foreground/5"
+        >
+          Refresh
+        </button>
+      </div>
+
+      <div className="mt-4 grid gap-2 md:grid-cols-2">
+        <div className="rounded-xl bg-black/10 px-3 py-2">
+          <p className="text-[11px] uppercase tracking-wide text-muted-foreground/60">
+            Model
+          </p>
+          <p className="mt-1 text-sm text-foreground">{agent.model}</p>
+        </div>
+
+        <div className="rounded-xl bg-black/10 px-3 py-2">
+          <p className="text-[11px] uppercase tracking-wide text-muted-foreground/60">
+            Workspace
+          </p>
+          <p className="mt-1 break-all text-sm text-foreground">{agent.workspace}</p>
+        </div>
+
+        <div className="rounded-xl bg-black/10 px-3 py-2">
+          <p className="text-[11px] uppercase tracking-wide text-muted-foreground/60">
+            Status
+          </p>
+          <p className="mt-1 text-sm text-foreground">{agent.status}</p>
+        </div>
+
+        <div className="rounded-xl bg-black/10 px-3 py-2">
+          <p className="text-[11px] uppercase tracking-wide text-muted-foreground/60">
+            Last active
+          </p>
+          <p className="mt-1 text-sm text-foreground">{formatAgo(agent.lastActive)}</p>
+        </div>
+      </div>
+
+      {agent.bindings.length > 0 && (
+        <div className="mt-4">
+          <p className="text-[11px] uppercase tracking-wide text-muted-foreground/60">
+            Bindings
+          </p>
+          <div className="mt-2 flex flex-wrap gap-2">
+            {agent.bindings.map((binding) => (
+              <span
+                key={binding}
+                className="rounded-full border border-foreground/10 bg-black/10 px-2.5 py-1 text-xs text-foreground/80"
+              >
+                {binding}
+              </span>
+            ))}
+          </div>
+        </div>
+      )}
     </div>
   );
 }
@@ -4388,6 +3430,7 @@ export function AgentsView() {
   const [selectedWorkspacePath, setSelectedWorkspacePath] = useState<string | null>(null);
   const [showAddModal, setShowAddModal] = useState(false);
   const [savedAgentOrder, setSavedAgentOrder] = useState<string[]>(loadSavedAgentOrder);
+  const [stylePresetId, setStylePresetId] = useState<AgentsStyleId>(loadSavedAgentsStyle);
 
   const handleAgentClick = useCallback((id: string) => {
     setSelectedId(id);
@@ -4396,6 +3439,16 @@ export function AgentsView() {
 
   const handleWorkspaceClick = useCallback((workspacePath: string) => {
     setSelectedWorkspacePath(workspacePath);
+  }, []);
+
+  const stylePreset = useMemo(
+    () => getAgentsStylePreset(stylePresetId),
+    [stylePresetId]
+  );
+
+  const applyStylePreset = useCallback((id: AgentsStyleId) => {
+    setStylePresetId(id);
+    saveAgentsStyle(id);
   }, []);
 
   const openDocumentForWorkspace = useCallback((workspacePath: string, relativePath?: string | null) => {
@@ -4539,12 +3592,18 @@ export function AgentsView() {
   }, [viewMode]);
 
   const agentCount = data?.agents.length ?? 0;
-  const sectionDescription =
-    tab === "models"
-      ? "Manage providers, models, and fallbacks"
-      : tab === "subagents"
-        ? "Subagent orchestration, controls, and defaults"
-        : `${agentCount} agent${agentCount !== 1 ? "s" : ""} configured`;
+  const totalSessions = data?.agents.reduce((sum, agent) => sum + agent.sessionCount, 0) ?? 0;
+  const activeCount = data?.agents.filter((agent) => agent.status === "active").length ?? 0;
+  const runtimeCount = data?.agents.reduce((count, agent) => count + agent.runtimeSubagents.filter((sub) => sub.status === "running").length, 0) ?? 0;
+  const workspaceCount = data ? new Set(data.agents.map((agent) => agent.workspace)).size : 0;
+  const channelCount = data ? new Set(data.agents.flatMap((agent) => agent.channels)).size : 0;
+  const defaultAgent = data?.agents.find((agent) => agent.isDefault) || data?.agents[0] || null;
+  const viewOptions = [
+    { key: "flow" as ViewMode, icon: GitFork, label: "Hierarchy" },
+    { key: "grid" as ViewMode, icon: LayoutGrid, label: "Cards" },
+    { key: "subagents" as ViewMode, icon: Network, label: "Subagents" },
+    { key: "models" as ViewMode, icon: Cpu, label: "Models" },
+  ];
 
   // Models tab — delegate to ModelsView which has its own layout
   if (tab === "models") {
@@ -4561,29 +3620,43 @@ export function AgentsView() {
 
   if (error || !data) {
     return (
-      <div className="flex flex-1 flex-col items-center justify-center gap-3 text-muted-foreground">
+      <div className="flex flex-1 flex-col items-center justify-center gap-2 text-muted-foreground">
         <AlertCircle className="h-8 w-8 text-red-400" />
         <p className="text-sm">Failed to load agents</p>
         <p className="text-xs text-muted-foreground/60">{error}</p>
-        <button type="button" onClick={fetchAgents} className="rounded-lg bg-foreground/5 px-3 py-1.5 text-xs text-foreground/70 hover:bg-foreground/10">
-          Retry
-        </button>
+        <button
+    type="button"
+    onClick={fetchAgents}
+    className="rounded-lg bg-foreground/5 px-3 py-1.5 text-xs text-foreground hover:bg-foreground/10"
+  >
+    Retry
+  </button>
       </div>
     );
   }
 
   return (
-    <SectionLayout>
+    <SectionLayout className="bg-transparent">
+      <div
+        className="relative flex min-h-0 flex-1 flex-col overflow-hidden"
+        style={stylePreset.variables}
+      >
+        <div className="pointer-events-none absolute inset-0">
+          <div className="absolute inset-0" style={{ background: "var(--agents-page-bg)" }} />
+          <div className="absolute left-[6%] top-16 h-40 w-40 rounded-full blur-3xl" style={{ background: "var(--agents-orb-a)" }} />
+          <div className="absolute right-[8%] top-20 h-48 w-48 rounded-full blur-3xl" style={{ background: "var(--agents-orb-b)" }} />
+          <div className="absolute bottom-[-8rem] left-[28%] h-40 w-40 rounded-full blur-3xl" style={{ background: "var(--agents-orb-c)" }} />
+        </div>
       <SectionHeader
         title={
-          <span className="flex items-center gap-3">
-            <span className="flex h-9 w-9 items-center justify-center rounded-lg bg-[var(--accent-brand-subtle)]">
-              <Users className="h-5 w-5 text-[var(--accent-brand-text)]" />
+          <span className="flex items-center gap-2">
+            <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-[var(--accent-brand-subtle)]">
+              <Users className="h-4 w-4 text-[var(--accent-brand-text)]" />
             </span>
             Agents
           </span>
         }
-        description={sectionDescription}
+        description="Monitor agents, delegation paths, workspaces, channels, and runtime activity."
         actions={
           <div className="flex flex-wrap items-center gap-2">
             {/* Unified view switcher — pill segmented control */}
@@ -4641,18 +3714,18 @@ export function AgentsView() {
 
       {/* Flow view: full width, full remaining height */}
       {tab === "agents" && view === "flow" && (
-        <FlowView
+        <HierarchyView
           data={data}
           selectedId={selectedId}
           onSelect={handleAgentClick}
-          selectedWorkspacePath={selectedWorkspacePath}
-          onSelectWorkspace={handleWorkspaceClick}
+          groups={MISSION_CONTROL_GROUPS}
+          mainAgentId={MISSION_CONTROL_MAIN_AGENT_ID}
         />
       )}
 
       {/* Grid view + detail: scrollable with max-width */}
       {tab === "agents" && view === "grid" && (
-        <SectionBody width="content" padding="roomy" innerClassName="space-y-5">
+        <SectionBody width="content" padding="roomy" innerClassName="space-y-2">
           <SummaryBar agents={data.agents} />
           <GridView
             agents={data.agents}
@@ -4710,6 +3783,7 @@ export function AgentsView() {
           onOpenDocument={openDocumentForWorkspace}
         />
       )}
-    </SectionLayout>
+          </div>
+</SectionLayout>
   );
 }
